@@ -2,11 +2,13 @@
 
 **Model your agentic AI platform like the system it actually is — then generate it, and (soon) prove the running system matches.**
 
+**▶ [Try it live in your browser](https://fox-river-ai.github.io/agent-atlas-studio/)** — no install. (Or run the desktop app locally; see below.)
+
 `agent-atlas-studio` is an Erwin‑style visual modeler for agentic AI systems. You lay out the whole platform — the orchestrator, its tasks, the agents, their MCP tools, jobs, model routers, and the datastores they touch — as **one collapsible model**. Every object is validated live against the open [`agent-atlas`](https://github.com/Fox-River-AI/agent-atlas) manifest schema, and the model exports to a version‑controlled registry that becomes the source of truth for building and governing the fleet.
 
-![agent-atlas-studio modeling the Noesis clinical-CDI platform](docs/screenshot.png)
+![agent-atlas-studio modeling the Noesis clinical-CDI platform](docs/Agent-Atlas.png)
 
-<p align="center"><sub>A governed clinical‑CDI platform: one orchestrator → tasks → agents → tools / jobs / systems, validated and ready to export.</sub></p>
+<p align="center"><sub>A governed clinical‑CDI platform — orchestrator → tasks → agents → tools / jobs / systems — with the model tree, the graph, and the typed properties of the selected object. Validated and ready to export.</sub></p>
 
 [![License: Apache-2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 ![Stack](https://img.shields.io/badge/Vite_+_React_19_+_Tauri_2-1e1e1e?logo=react)
