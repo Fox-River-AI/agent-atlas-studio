@@ -8,6 +8,7 @@
 //   existing component or create a new stub inline (right-click); a created stub
 //   lands in the component library (single source of truth) flagged incomplete.
 import React, { useCallback, useState, useEffect } from 'react';
+import { useTheme } from './ThemeContext';
 import {
   ReactFlow,
   Background,
@@ -57,6 +58,8 @@ function HighLevelTaskNode({ data, selected }) {
 const taskFlowNodeTypes = { hltask: HighLevelTaskNode };
 
 export function TaskFlowView({ tasks, setTasks, taskFlowEdges, setTaskFlowEdges, onOpenTask, onAddTask }) {
+  const { themeId } = useTheme();
+  const colorMode = themeId === 'light' ? 'light' : 'dark';
   // Use React Flow's own node/edge state hooks (NOT raw parent useState) — this
   // is what registers nodes with the internal store so v12 measures them and
   // flips them visible. Driving nodes from plain parent state leaves them stuck
@@ -133,6 +136,8 @@ export function TaskFlowView({ tasks, setTasks, taskFlowEdges, setTaskFlowEdges,
           onEdgesChange={onEdgesChange}
           onConnect={onConnect}
           nodeTypes={taskFlowNodeTypes}
+          colorMode={colorMode}
+          proOptions={{ hideAttribution: true }}
           fitView
           fitViewOptions={{ maxZoom: 1, padding: 0.3 }}
           minZoom={0.2}
@@ -167,6 +172,8 @@ const COMPONENT_KINDS = [
 ];
 
 export function TaskDetailView({ task, componentNodes, onUpdateTaskGraph, onCreateComponent }) {
+  const { themeId } = useTheme();
+  const colorMode = themeId === 'light' ? 'light' : 'dark';
   const [ctx, setCtx] = useState(null); // {x,y} right-click position on canvas
   const taskId = task?.id;
 
@@ -243,6 +250,8 @@ export function TaskDetailView({ task, componentNodes, onUpdateTaskGraph, onCrea
           onEdgesChange={onEdgesChange}
           onConnect={onConnect}
           nodeTypes={stepNodeTypes}
+          colorMode={colorMode}
+          proOptions={{ hideAttribution: true }}
           fitView
           fitViewOptions={{ maxZoom: 1, padding: 0.3 }}
           minZoom={0.2}

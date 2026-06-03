@@ -19,6 +19,7 @@ import PropertiesPanel from './PropertiesPanel';
 import ObjectPalette from './ObjectPalette';
 import { TaskFlowView, TaskDetailView } from './Orchestration';
 import { SettingsModal, AboutModal } from './Modals';
+import { useTheme } from './ThemeContext';
 import { DEFAULT_MODEL } from './schema';
 import { buildRegistry, validateModel, crossChecks } from './model';
 import './atlas.css';
@@ -63,6 +64,10 @@ const initialEdges = [
 ];
 
 export default function AtlasModeler() {
+  const { themeId } = useTheme();
+  // React Flow's built-in chrome (zoom Controls, attribution) follows the theme
+  // so it doesn't render as a bright light strip on the dark canvas.
+  const colorMode = themeId === 'light' ? 'light' : 'dark';
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
   const [selectedId, setSelectedId] = useState(null);
@@ -300,6 +305,8 @@ export default function AtlasModeler() {
                   onConnect={onConnect}
                   onSelectionChange={onSelectionChange}
                   nodeTypes={nodeTypes}
+                  colorMode={colorMode}
+                  proOptions={{ hideAttribution: true }}
                   fitView
                 >
                   <Background />
