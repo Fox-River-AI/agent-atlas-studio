@@ -25,13 +25,15 @@ export default function PropertiesPanel({ node, onChange, errors }) {
   const set = (patch) => onChange(node.id, patch);
 
   return (
-    <div className="atlas-panel">
+    // autoCapitalize/Correct/spellCheck off so ids like "db-connect" aren't
+    // mangled to "Db-connect" by the webview (WebKit inherits these to inputs).
+    <div className="atlas-panel" autoCapitalize="off" autoCorrect="off" spellCheck={false}>
       <h3>{{ task: 'Task', agent: 'Agent', tool: 'MCP Tool', job: 'Job', system: 'External System', router: 'Router' }[node.type] || node.type}</h3>
 
       {node.type === 'task' ? (
         <>
           <Field label="id" hint="lowercase, hyphens">
-            <input value={d.id || ''} onChange={(e) => set({ id: e.target.value })} placeholder="ingest-mssql-data" />
+            <input value={d.id || ''} onChange={(e) => set({ id: e.target.value.toLowerCase() })} placeholder="ingest-mssql-data" />
           </Field>
           <Field label="label" hint="human-readable name shown on the canvas">
             <input value={d.label || ''} onChange={(e) => set({ label: e.target.value })} placeholder="Ingest MS SQL Data" />
@@ -43,7 +45,7 @@ export default function PropertiesPanel({ node, onChange, errors }) {
       ) : (
         <>
           <Field label="id" hint="lowercase, hyphens; matches the manifest filename">
-            <input value={d.id || ''} onChange={(e) => set({ id: e.target.value })} placeholder="intake-classifier" />
+            <input value={d.id || ''} onChange={(e) => set({ id: e.target.value.toLowerCase() })} placeholder="intake-classifier" />
           </Field>
           <Field label="owner">
             <input value={d.owner || ''} onChange={(e) => set({ owner: e.target.value })} placeholder="platform-team" />

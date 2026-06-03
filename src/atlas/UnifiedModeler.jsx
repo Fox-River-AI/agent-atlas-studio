@@ -117,16 +117,37 @@ export default function UnifiedModeler() {
     // Build edges in the source→target shape buildRegistry consumes (it reads
     // agent→tool allowlists etc. from edges between component nodes).
     const files = buildRegistry(asNodes, edges);
-    if (!Object.keys(files).length) { setExportMsg('Nothing to export yet — add some objects.'); return; }
+    const count = Object.keys(files).length;
+    if (!count) { setExportMsg('Nothing to export yet — add some objects.'); return; }
     const zip = new JSZip();
     for (const [path, content] of Object.entries(files)) zip.file(path, content);
+
+    const isTauri = typeof window !== 'undefined' && !!window.__TAURI_INTERNALS__;
+    if (isTauri) {
+      // Native Save-As → write the zip to the chosen path (the browser <a download>
+      // trick doesn't reliably write to disk inside the Tauri webview).
+      try {
+        const { save } = await import('@tauri-apps/plugin-dialog');
+        const { writeFile } = await import('@tauri-apps/plugin-fs');
+        const path = await save({ defaultPath: 'agent-atlas-registry.zip', filters: [{ name: 'Zip', extensions: ['zip'] }] });
+        if (!path) { setExportMsg('Export cancelled.'); return; }
+        const bytes = await zip.generateAsync({ type: 'uint8array' });
+        await writeFile(path, bytes);
+        setExportMsg(`Exported ${count} file(s) → ${path}`);
+      } catch (e) {
+        setExportMsg(`Export failed: ${e?.message || e}`);
+      }
+      return;
+    }
+
+    // Web build: ordinary browser download.
     const blob = await zip.generateAsync({ type: 'blob' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url; a.download = 'agent-atlas-registry.zip';
     document.body.appendChild(a); a.click(); document.body.removeChild(a);
     URL.revokeObjectURL(url);
-    setExportMsg(`Exported ${Object.keys(files).length} file(s).`);
+    setExportMsg(`Exported ${count} file(s) (check your browser downloads).`);
   };
 
   const selected = selectedId ? objects[selectedId] : null;
