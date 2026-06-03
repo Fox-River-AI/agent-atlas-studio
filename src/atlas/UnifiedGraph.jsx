@@ -18,6 +18,8 @@ import {
   MarkerType,
   Handle,
   Position,
+  ReactFlowProvider,
+  useReactFlow,
 } from '@xyflow/react';
 import { useTheme } from './ThemeContext';
 
@@ -90,7 +92,7 @@ function layoutVisible(objects, expanded, rootIds) {
   return visible;
 }
 
-export default function UnifiedGraph({
+function UnifiedGraphInner({
   objects,         // { id: {id, kind, parent, data} }
   edges,           // [{ id, source, target, label? }]
   expanded,        // { id: bool }
@@ -99,9 +101,11 @@ export default function UnifiedGraph({
   onSelect,
   onConnect,
   validityById,    // { id: bool }
+  focusReq,        // { id, n } — when this changes, center the view on that node
 }) {
   const { themeId } = useTheme();
   const colorMode = themeId === 'light' ? 'light' : 'dark';
+  const rf = useReactFlow();
 
   const rootIds = useMemo(
     () => Object.values(objects).filter((o) => !o.parent).map((o) => o.id),
@@ -163,6 +167,18 @@ export default function UnifiedGraph({
 
   const handleConnect = useCallback((params) => onConnect?.(params), [onConnect]);
 
+  // Bring a just-created/focused node into view so new objects never appear
+  // off-screen. Runs after the node is laid out.
+  useEffect(() => {
+    if (!focusReq?.id) return;
+    const p = positioned.find((n) => n.id === focusReq.id);
+    if (!p) return;
+    const t = setTimeout(() => {
+      rf.setCenter(p.x + 95, p.y + 30, { zoom: Math.max(rf.getZoom?.() || 1, 0.8), duration: 300 });
+    }, 60);
+    return () => clearTimeout(t);
+  }, [focusReq, positioned, rf]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // Select on node click ONLY. We deliberately do NOT use onSelectionChange to
   // drive selection: because we rebuild the node array each render (without
   // carrying React Flow's internal `selected` flag), onSelectionChange fires
@@ -190,5 +206,14 @@ export default function UnifiedGraph({
         <Controls />
       </ReactFlow>
     </div>
+  );
+}
+
+// Wrap in a provider so the inner component can use useReactFlow (setCenter etc.).
+export default function UnifiedGraph(props) {
+  return (
+    <ReactFlowProvider>
+      <UnifiedGraphInner {...props} />
+    </ReactFlowProvider>
   );
 }

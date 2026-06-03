@@ -33,6 +33,7 @@ export default function UnifiedModeler() {
   const [edges, setEdges] = useState(SEED_EDGES);
   const [expanded, setExpanded] = useState({ 'ingest-mssql': true, 'connect-agent': false });
   const [selectedId, setSelectedId] = useState(null);
+  const [focusReq, setFocusReq] = useState(null); // { id, n } — bump n to re-center
 
   const toggleExpand = useCallback((id) => setExpanded((e) => ({ ...e, [id]: !e[id] })), []);
 
@@ -44,6 +45,7 @@ export default function UnifiedModeler() {
     const id = `${kind}-${seq}`;
     setObjects((o) => ({ ...o, [id]: { id, kind, parent: null, data: blankData(kind) } }));
     setSelectedId(id);
+    setFocusReq({ id, n: (focusReq?.n || 0) + 1 }); // unique each time so the view re-centers even on the same id
   };
 
   // Draw a relationship: source → target. This also establishes nesting —
@@ -114,6 +116,7 @@ export default function UnifiedModeler() {
           onSelect={setSelectedId}
           onConnect={connect}
           validityById={validityById}
+          focusReq={focusReq}
         />
         <PropertiesPanel node={selectedNode} onChange={updateSelected} errors={selectedErrors} />
       </div>
