@@ -283,6 +283,18 @@
 .atlas-hltask-label { font-weight: 600; font-size: 14px; color: var(--accent); }
 .atlas-hltask-meta { font-size: 11px; color: var(--text-muted); margin-top: 3px; }
 
+/* Empty-state prompt overlaid on an empty task-detail canvas */
+.atlas-task-emptyhint {
+  position: absolute; inset: 0; display: flex; flex-direction: column;
+  align-items: center; justify-content: center; gap: 0.6rem; text-align: center;
+  pointer-events: none; color: var(--text-muted);
+}
+.atlas-task-emptyhint p { margin: 0; font-size: 1.05rem; color: var(--text); }
+.atlas-task-emptyhint .primary {
+  pointer-events: auto; background: var(--accent); color: var(--accent-fg); border: none;
+  border-radius: 6px; padding: 0.5rem 1.1rem; cursor: pointer; font-weight: 600; font-size: 0.95rem;
+}
+
 /* Context menu grouping (task detail: reference or create components) */
 .atlas-ctx-group { padding: 0.25rem 0; border-bottom: 1px solid var(--border-soft); }
 .atlas-ctx-group:last-child { border-bottom: none; }

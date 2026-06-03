@@ -7,7 +7,7 @@
 //   components (agents/tools/jobs/systems), sequenced. You can reference an
 //   existing component or create a new stub inline (right-click); a created stub
 //   lands in the component library (single source of truth) flagged incomplete.
-import React, { useCallback, useState, useMemo } from 'react';
+import React, { useCallback, useState, useEffect } from 'react';
 import {
   ReactFlow,
   Background,
@@ -15,6 +15,8 @@ import {
   addEdge,
   applyNodeChanges,
   applyEdgeChanges,
+  useNodesState,
+  useEdgesState,
   MarkerType,
   Handle,
   Position,
@@ -39,39 +41,49 @@ function HighLevelTaskNode({ data, selected }) {
 const taskFlowNodeTypes = { hltask: HighLevelTaskNode };
 
 export function TaskFlowView({ tasks, setTasks, taskFlowEdges, setTaskFlowEdges, onOpenTask, onAddTask }) {
-  // Build React Flow nodes from tasks; inject open handler + step count.
-  // Memoized: React Flow v12 thrashes node measurement if it receives fresh
-  // object references every render, which can leave nodes stuck visibility:hidden.
-  const rfNodes = useMemo(
-    () =>
-      tasks.map((t) => ({
+  // Use React Flow's own node/edge state hooks (NOT raw parent useState) — this
+  // is what registers nodes with the internal store so v12 measures them and
+  // flips them visible. Driving nodes from plain parent state leaves them stuck
+  // visibility:hidden. We seed from the parent's tasks and sync changes back.
+  const [rfNodes, setRfNodes, onNodesChange] = useNodesState([]);
+  const [rfEdges, setRfEdges, onEdgesChange] = useEdgesState(taskFlowEdges);
+
+  // Seed/refresh RF nodes from the parent tasks (add/remove/label/count), while
+  // preserving live positions React Flow is managing.
+  useEffect(() => {
+    setRfNodes((prev) => {
+      const prevById = Object.fromEntries(prev.map((n) => [n.id, n]));
+      return tasks.map((t) => ({
         id: t.id,
         type: 'hltask',
-        position: t.position,
+        position: prevById[t.id]?.position || t.position,
         data: { taskId: t.id, label: t.label, count: (t.nodes || []).length, onOpen: onOpenTask },
-      })),
-    [tasks, onOpenTask]
-  );
+      }));
+    });
+  }, [tasks, onOpenTask, setRfNodes]);
 
-  const onNodesChange = useCallback(
-    (changes) =>
-      setTasks((ts) => {
-        const updated = applyNodeChanges(changes, ts.map((t) => ({ id: t.id, position: t.position, data: {} })));
-        const posById = Object.fromEntries(updated.map((n) => [n.id, n.position]));
-        return ts.map((t) => ({ ...t, position: posById[t.id] || t.position }));
-      }),
-    [setTasks]
-  );
-  const onEdgesChange = useCallback(
-    (changes) => setTaskFlowEdges((es) => applyEdgeChanges(changes, es)),
-    [setTaskFlowEdges]
-  );
+  // Push position changes back to the parent so they persist across view switches.
+  useEffect(() => {
+    setTasks((ts) => {
+      const posById = Object.fromEntries(rfNodes.map((n) => [n.id, n.position]));
+      let changed = false;
+      const next = ts.map((t) => {
+        const p = posById[t.id];
+        if (p && (p.x !== t.position.x || p.y !== t.position.y)) { changed = true; return { ...t, position: p }; }
+        return t;
+      });
+      return changed ? next : ts;
+    });
+  }, [rfNodes, setTasks]);
+
   const onConnect = useCallback(
     (params) => {
       const when = window.prompt('Condition for this task transition? (blank = unconditional "then")', '') || '';
-      setTaskFlowEdges((es) => addEdge({ ...params, label: when || undefined, markerEnd: { type: MarkerType.ArrowClosed } }, es));
+      const edge = { ...params, label: when || undefined, markerEnd: { type: MarkerType.ArrowClosed } };
+      setRfEdges((es) => addEdge(edge, es));
+      setTaskFlowEdges((es) => addEdge(edge, es));
     },
-    [setTaskFlowEdges]
+    [setRfEdges, setTaskFlowEdges]
   );
 
   if (tasks.length === 0) {
@@ -95,7 +107,7 @@ export function TaskFlowView({ tasks, setTasks, taskFlowEdges, setTaskFlowEdges,
       <div className="atlas-orch-canvas">
         <ReactFlow
           nodes={rfNodes}
-          edges={taskFlowEdges}
+          edges={rfEdges}
           onNodesChange={onNodesChange}
           onEdgesChange={onEdgesChange}
           onConnect={onConnect}
@@ -135,42 +147,46 @@ const COMPONENT_KINDS = [
 
 export function TaskDetailView({ task, componentNodes, onUpdateTaskGraph, onCreateComponent }) {
   const [ctx, setCtx] = useState(null); // {x,y} right-click position on canvas
+  const taskId = task?.id;
 
-  if (!task) return <div className="atlas-orch"><div className="atlas-orch-empty"><p>Task not found.</p></div></div>;
+  // React Flow's own state (registers nodes with the store so they measure +
+  // become visible). Seeded from the task; synced back for persistence.
+  const [rfNodes, setRfNodes, onNodesChange] = useNodesState([]);
+  const [rfEdges, setRfEdges, onEdgesChange] = useEdgesState([]);
 
-  const nodes = task.nodes || [];
-  const edges = task.edges || [];
+  // (Re)seed when the open task changes.
+  useEffect(() => {
+    setRfNodes((task?.nodes || []).map((n) => ({ ...n })));
+    setRfEdges((task?.edges || []).map((e) => ({ ...e })));
+  }, [taskId, setRfNodes, setRfEdges]);
 
-  const setNodes = (updater) => onUpdateTaskGraph(task.id, { nodes: typeof updater === 'function' ? updater(nodes) : updater });
-  const setEdges = (updater) => onUpdateTaskGraph(task.id, { edges: typeof updater === 'function' ? updater(edges) : updater });
+  // Sync inner graph back to the parent task.
+  useEffect(() => {
+    if (taskId) onUpdateTaskGraph(taskId, { nodes: rfNodes, edges: rfEdges });
+  }, [rfNodes, rfEdges, taskId]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const onNodesChange = useCallback((changes) => setNodes((ns) => applyNodeChanges(changes, ns)), [task, nodes]);
-  const onEdgesChange = useCallback((changes) => setEdges((es) => applyEdgeChanges(changes, es)), [task, edges]);
   const onConnect = useCallback(
     (params) => {
       const when = window.prompt('Condition for this step transition? (blank = unconditional "then")', '') || '';
-      setEdges((es) => addEdge({ ...params, label: when || undefined, markerEnd: { type: MarkerType.ArrowClosed } }, es));
+      setRfEdges((es) => addEdge({ ...params, label: when || undefined, markerEnd: { type: MarkerType.ArrowClosed } }, es));
     },
-    [task, edges]
+    [setRfEdges]
   );
 
-  // Components available to reference, grouped by type.
   const existingByType = (t) => componentNodes.filter((n) => n.type === t).map((n) => n.data.id).filter(Boolean).sort();
 
-  // Place a step that references (or creates) a component.
-  const placeStep = (componentType, componentId) => {
-    const key = `step-${nodes.length + 1}-${Math.abs(hashish(componentId))}`;
-    setNodes((ns) => [
+  const placeStep = useCallback((componentType, componentId) => {
+    setRfNodes((ns) => [
       ...ns,
       {
-        id: key,
+        id: `step-${ns.length + 1}-${Math.abs(hashish(componentId))}`,
         type: 'step',
         position: ctx ? { x: ctx.cx, y: ctx.cy } : { x: 120 + (ns.length * 50) % 300, y: 100 + (ns.length * 60) % 240 },
         data: { componentType, componentId },
       },
     ]);
     setCtx(null);
-  };
+  }, [ctx, setRfNodes]);
 
   const handleCreateNew = (componentType) => {
     const name = window.prompt(`New ${componentType} id (lowercase-hyphens):`, '');
@@ -178,17 +194,20 @@ export function TaskDetailView({ task, componentNodes, onUpdateTaskGraph, onCrea
     const id = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
     if (!id) { setCtx(null); return; }
     // Create the stub in the component library (single source of truth), then
-    // reference it here. It will show invalid until fully defined in the component view.
+    // reference it here. It shows invalid until fully defined in the component view.
     onCreateComponent(componentType, undefined, id);
     placeStep(componentType, id);
   };
 
+  if (!task) return <div className="atlas-orch"><div className="atlas-orch-empty"><p>Task not found.</p></div></div>;
+
   return (
+   <ReactFlowProvider>
     <div className="atlas-orch">
       <div className="atlas-orch-bar">
         <span className="atlas-orch-hint">
-          Right-click the canvas to add a step (reference an existing component or create a new one).
-          Drag step → step to sequence them.
+          Add steps (an existing component or a new one), then drag step → step to sequence them.
+          You can also right-click the canvas.
         </span>
       </div>
       <div
@@ -197,8 +216,8 @@ export function TaskDetailView({ task, componentNodes, onUpdateTaskGraph, onCrea
         onClick={() => setCtx(null)}
       >
         <ReactFlow
-          nodes={nodes}
-          edges={edges}
+          nodes={rfNodes}
+          edges={rfEdges}
           onNodesChange={onNodesChange}
           onEdgesChange={onEdgesChange}
           onConnect={onConnect}
@@ -210,6 +229,20 @@ export function TaskDetailView({ task, componentNodes, onUpdateTaskGraph, onCrea
           <Background />
           <Controls />
         </ReactFlow>
+
+        {/* Empty-state prompt so a new task canvas isn't a mystery blank. */}
+        {rfNodes.length === 0 && !ctx && (
+          <div className="atlas-task-emptyhint">
+            <p>This task has no steps yet.</p>
+            <p className="atlas-orch-empty-sub">Add the agents, tools, and jobs that carry out “{task.label}”.</p>
+            <button
+              className="primary"
+              onClick={(e) => { e.stopPropagation(); const r = e.currentTarget.getBoundingClientRect(); setCtx({ x: r.left, y: r.bottom + 6, cx: 160, cy: 120 }); }}
+            >
+              + Add component
+            </button>
+          </div>
+        )}
 
         {ctx && (
           <div className="atlas-ctxmenu" style={{ left: ctx.x, top: ctx.y }} onClick={(e) => e.stopPropagation()}>
@@ -226,6 +259,7 @@ export function TaskDetailView({ task, componentNodes, onUpdateTaskGraph, onCrea
         )}
       </div>
     </div>
+   </ReactFlowProvider>
   );
 }
 
