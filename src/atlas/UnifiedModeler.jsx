@@ -4,10 +4,13 @@
 // so expand/collapse + properties-at-every-level are verifiable now. Later
 // steps fold this into the main AtlasModeler and add create/connect, SAs, stubs.
 import React, { useState, useMemo, useCallback } from 'react';
+import JSZip from 'jszip';
 import UnifiedGraph from './UnifiedGraph';
 import PropertiesPanel from './PropertiesPanel';
+import ModelTree from './ModelTree';
+import { SettingsModal, AboutModal } from './Modals';
 import { VALIDATORS, formatErrors, DEFAULT_MODEL } from './schema';
-import { manifestFor } from './model';
+import { manifestFor, buildRegistry } from './model';
 import { blankData, CREATABLE_KINDS } from './blankData';
 import { canConnect, connectionReason } from './relationships';
 import './atlas.css';
@@ -35,8 +38,21 @@ export default function UnifiedModeler() {
   const [expanded, setExpanded] = useState({ 'ingest-mssql': true, 'connect-agent': false });
   const [selectedId, setSelectedId] = useState(null);
   const [focusReq, setFocusReq] = useState(null); // { id, n } — bump n to re-center
+  // Chrome state
+  const [treeCollapsed, setTreeCollapsed] = useState(false);
+  const [panelOpen, setPanelOpen] = useState(true);
+  const [modal, setModal] = useState(null); // 'settings' | 'about'
+  const [subjectAreas] = useState([]); // wired in Step 3
+  const [currentSA, setCurrentSA] = useState(null);
+  const [exportMsg, setExportMsg] = useState('');
 
   const toggleExpand = useCallback((id) => setExpanded((e) => ({ ...e, [id]: !e[id] })), []);
+
+  // The unified objects, in the {id,type,data} node shape buildRegistry/manifestFor expect.
+  const asNodes = useMemo(
+    () => Object.values(objects).filter((o) => o.kind !== 'task').map((o) => ({ id: o.id, type: o.kind, data: o.data })),
+    [objects]
+  );
 
   let seq = Object.keys(objects).length;
   // Create a new object (top-level until connected). Select it so its
@@ -89,6 +105,24 @@ export default function UnifiedModeler() {
     return out;
   }, [objects, edges]);
 
+  const allValid = useMemo(() => Object.values(validityById).every(Boolean), [validityById]);
+
+  const exportRegistry = async () => {
+    // Build edges in the source→target shape buildRegistry consumes (it reads
+    // agent→tool allowlists etc. from edges between component nodes).
+    const files = buildRegistry(asNodes, edges);
+    if (!Object.keys(files).length) { setExportMsg('Nothing to export yet — add some objects.'); return; }
+    const zip = new JSZip();
+    for (const [path, content] of Object.entries(files)) zip.file(path, content);
+    const blob = await zip.generateAsync({ type: 'blob' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = 'agent-atlas-registry.zip';
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    setExportMsg(`Exported ${Object.keys(files).length} file(s).`);
+  };
+
   const selected = selectedId ? objects[selectedId] : null;
   // PropertiesPanel expects a React-Flow-style node ({type, data}); adapt.
   const selectedNode = selected ? { id: selected.id, type: selected.kind, data: selected.data } : null;
@@ -104,32 +138,61 @@ export default function UnifiedModeler() {
     return m && !v(m) ? formatErrors(v.errors) : null;
   }, [selected, objects, edges]);
 
+  const issueCount = Object.values(validityById).filter((v) => v === false).length;
+
   return (
     <div className="atlas-page">
       <div className="atlas-toolbar">
-        <h1>Agent Atlas — Unified Graph (Step 1)</h1>
+        <h1>Agent Atlas</h1>
         <div className="atlas-actions">
-          {CREATABLE_KINDS.map((k) => (
-            <button key={k.kind} onClick={() => createObject(k.kind)}>+ {k.label}</button>
-          ))}
-          <span className="atlas-orch-hint">Drag node → node to connect (sets nesting). Double-click to expand/collapse. Click to edit.</span>
-          {connectMsg && <span className="atlas-orch-warn">{connectMsg}</span>}
+          <span className={`atlas-status ${allValid ? 'ok' : 'bad'}`}>
+            {allValid ? '✓ registry valid' : `✗ ${issueCount} issue(s)`}
+          </span>
+          <button className="primary" onClick={exportRegistry} disabled={!allValid}>Export registry</button>
+          <button className="atlas-panel-toggle" onClick={() => setPanelOpen((o) => !o)}
+            title={panelOpen ? 'Collapse properties panel' : 'Show properties panel'}>
+            {panelOpen ? 'Panel ⟩' : '⟨ Panel'}
+          </button>
         </div>
       </div>
+
+      {connectMsg && <div className="atlas-cross-issues">{connectMsg}</div>}
+      {exportMsg && <div className="atlas-export-msg">{exportMsg}</div>}
+
       <div className="atlas-body">
+        <ModelTree
+          objects={objects}
+          expanded={expanded}
+          onToggle={toggleExpand}
+          selectedId={selectedId}
+          onSelect={(id) => { setSelectedId(id); setPanelOpen(true); setFocusReq({ id, n: (focusReq?.n || 0) + 1 }); }}
+          validityById={validityById}
+          subjectAreas={subjectAreas}
+          currentSA={currentSA}
+          onSelectSA={setCurrentSA}
+          onNewSA={() => setExportMsg('Subject Areas (saved views) are coming next.')}
+          onCreate={createObject}
+          collapsed={treeCollapsed}
+          onToggleCollapse={() => setTreeCollapsed((c) => !c)}
+          onOpenSettings={() => setModal('settings')}
+          onOpenAbout={() => setModal('about')}
+        />
         <UnifiedGraph
           objects={objects}
           edges={edges}
           expanded={expanded}
           onToggleExpand={toggleExpand}
           selectedId={selectedId}
-          onSelect={setSelectedId}
+          onSelect={(id) => { setSelectedId(id); if (id) setPanelOpen(true); }}
           onConnect={connect}
           validityById={validityById}
           focusReq={focusReq}
         />
-        <PropertiesPanel node={selectedNode} onChange={updateSelected} errors={selectedErrors} />
+        {panelOpen && <PropertiesPanel node={selectedNode} onChange={updateSelected} errors={selectedErrors} />}
       </div>
+
+      {modal === 'settings' && <SettingsModal onClose={() => setModal(null)} />}
+      {modal === 'about' && <AboutModal onClose={() => setModal(null)} />}
     </div>
   );
 }
