@@ -41,6 +41,18 @@
 .atlas-status.ok { color: var(--ok); }
 .atlas-status.bad { color: var(--bad); }
 
+.atlas-status.as-button { background: none; border: 1px solid transparent; cursor: pointer; border-radius: 4px; }
+.atlas-status.as-button.bad:hover { border-color: var(--bad); }
+.atlas-status.as-button:disabled { cursor: default; }
+
+.atlas-issues-bar { display: flex; flex-direction: column; background: var(--bg-elevated); border-bottom: 1px solid var(--border); max-height: 30vh; overflow-y: auto; }
+.atlas-issue-item {
+  text-align: left; background: none; border: none; border-bottom: 1px solid var(--border-soft);
+  color: var(--text); padding: 0.5rem 1.25rem; font-size: 0.88rem; cursor: pointer;
+}
+.atlas-issue-item:hover { background: var(--bg-panel); }
+.atlas-issue-item strong { color: var(--bad); font-weight: 600; }
+
 .atlas-cross-issues { background: var(--bg-elevated); color: var(--bad); padding: 0.5rem 1.25rem; font-size: 0.9rem; }
 .atlas-export-msg { background: var(--bg-elevated); color: var(--ok); padding: 0.5rem 1.25rem; font-size: 0.9rem; }
 

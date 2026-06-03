@@ -13,6 +13,7 @@ import { VALIDATORS, formatErrors, DEFAULT_MODEL } from './schema';
 import { manifestFor, buildRegistry } from './model';
 import { blankData, CREATABLE_KINDS } from './blankData';
 import { canConnect, connectionReason } from './relationships';
+import { namedIssues } from './validationMessages';
 import './atlas.css';
 
 // Seed: one task containing one agent; the agent contains two tools + a job.
@@ -91,21 +92,26 @@ export default function UnifiedModeler() {
     });
   }, []);
 
-  // Validity per object (drives the red/ok dot), reusing the same validators.
-  const validityById = useMemo(() => {
-    const out = {};
+  // Validate each object; capture both validity (for the dot) and raw errors
+  // (for the named, plain-language summary).
+  const { validityById, problemsByObj } = useMemo(() => {
+    const valid = {}, problems = {};
+    const allNodes = Object.values(objects).map((x) => ({ id: x.id, type: x.kind, data: x.data }));
     for (const o of Object.values(objects)) {
       const v = VALIDATORS[o.kind];
-      if (!v) { out[o.id] = true; continue; }
-      // Build a node-shaped wrapper for manifestFor.
+      if (!v) { valid[o.id] = true; continue; }
       const node = { id: o.id, type: o.kind, data: o.data };
-      const m = manifestFor(node, Object.values(objects).map((x) => ({ id: x.id, type: x.kind, data: x.data })), edges);
-      out[o.id] = m ? v(m) : true;
+      const m = manifestFor(node, allNodes, edges);
+      const ok = m ? v(m) : true;
+      valid[o.id] = ok;
+      if (!ok && v.errors) problems[o.id] = v.errors.slice();
     }
-    return out;
+    return { validityById: valid, problemsByObj: problems };
   }, [objects, edges]);
 
   const allValid = useMemo(() => Object.values(validityById).every(Boolean), [validityById]);
+  const issues = useMemo(() => namedIssues(problemsByObj, objects), [problemsByObj, objects]);
+  const [showIssues, setShowIssues] = useState(false);
 
   const exportRegistry = async () => {
     // Build edges in the source→target shape buildRegistry consumes (it reads
@@ -145,9 +151,14 @@ export default function UnifiedModeler() {
       <div className="atlas-toolbar">
         <h1>Agent Atlas</h1>
         <div className="atlas-actions">
-          <span className={`atlas-status ${allValid ? 'ok' : 'bad'}`}>
-            {allValid ? '✓ registry valid' : `✗ ${issueCount} issue(s)`}
-          </span>
+          <button
+            className={`atlas-status as-button ${allValid ? 'ok' : 'bad'}`}
+            onClick={() => setShowIssues((s) => !s)}
+            disabled={allValid}
+            title={allValid ? '' : 'Show what needs fixing'}
+          >
+            {allValid ? '✓ registry valid' : `✗ ${issueCount} issue(s) ▾`}
+          </button>
           <button className="primary" onClick={exportRegistry} disabled={!allValid}>Export registry</button>
           <button className="atlas-panel-toggle" onClick={() => setPanelOpen((o) => !o)}
             title={panelOpen ? 'Collapse properties panel' : 'Show properties panel'}>
@@ -158,6 +169,21 @@ export default function UnifiedModeler() {
 
       {connectMsg && <div className="atlas-cross-issues">{connectMsg}</div>}
       {exportMsg && <div className="atlas-export-msg">{exportMsg}</div>}
+
+      {showIssues && issues.length > 0 && (
+        <div className="atlas-issues-bar">
+          {issues.map((it) => (
+            <button
+              key={it.objId}
+              className="atlas-issue-item"
+              onClick={() => { setSelectedId(it.objId); setPanelOpen(true); setFocusReq({ id: it.objId, n: (focusReq?.n || 0) + 1 }); }}
+              title="Jump to this object"
+            >
+              <strong>{it.noun} “{it.label}”:</strong> {it.reasons.join('; ')}
+            </button>
+          ))}
+        </div>
+      )}
 
       <div className="atlas-body">
         <ModelTree
