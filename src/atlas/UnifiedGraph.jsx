@@ -21,6 +21,11 @@ import {
   ReactFlowProvider,
   useReactFlow,
 } from '@xyflow/react';
+// React Flow's base stylesheet — REQUIRED for edges, controls, and node layout
+// to render. (Previously imported by the now-deleted AtlasModeler; without it
+// edges vanish, controls show as unstyled "white squares", and the canvas
+// desyncs from the tree.)
+import '@xyflow/react/dist/style.css';
 import { useTheme } from './ThemeContext';
 
 const KIND_LABEL = { task: 'TASK', agent: 'AGENT', tool: 'MCP TOOL', job: 'JOB', router: 'ROUTER', system: 'SYSTEM' };

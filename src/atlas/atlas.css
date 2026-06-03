@@ -65,6 +65,18 @@
 .react-flow__edge.selected .react-flow__edge-path,
 .react-flow__edge:hover .react-flow__edge-path { stroke: var(--accent); stroke-width: 2px; }
 .react-flow__arrowhead { fill: var(--text-muted); }
+
+/* React Flow Controls — force theme colors so the zoom buttons aren't a light
+   grey block on the dark canvas (the "white squares" top-left). */
+.react-flow__controls { box-shadow: none; }
+.react-flow__controls-button {
+  background: var(--bg-elevated);
+  border-bottom: 1px solid var(--border);
+  color: var(--text);
+  fill: var(--text);
+}
+.react-flow__controls-button:hover { background: var(--bg-panel); }
+.react-flow__controls-button svg { fill: var(--text); }
 /* Containment edges (parent contains child): SAME weight + brightness as
    relationship edges — distinguished only by being dashed ("contains" vs the
    solid "relates-to"). */

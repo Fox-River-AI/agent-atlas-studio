@@ -15,34 +15,12 @@ import { blankData, CREATABLE_KINDS } from './blankData';
 import { canConnect, connectionReason } from './relationships';
 import { namedIssues } from './validationMessages';
 import './atlas.css';
-
-// Seed: one task containing one agent; the agent contains two tools + a job.
-const SEED_OBJECTS = {
-  'ingest-mssql': { id: 'ingest-mssql', kind: 'task', parent: null, data: { id: 'ingest-mssql', label: 'Ingest MS SQL Data' } },
-  'connect-agent': {
-    id: 'connect-agent', kind: 'agent', parent: 'ingest-mssql',
-    data: { id: 'connect-agent', owner: 'platform-team', version: '1.0.0', responsibility: 'Connect to the source database and read its catalog.', model: { ...DEFAULT_MODEL }, refusalConditions: ['Connection cannot be established.'], refusalEmits: 'refused', telemetry: [{ name: 'agent.connect.status', attributes: ['ok'] }] },
-  },
-  'db-connect': { id: 'db-connect', kind: 'tool', parent: 'connect-agent', data: { id: 'db-connect', owner: 'platform-team', version: '1.0.0', description: 'Open a connection to the source DB.', effect: 'read', authScope: 'db:read' } },
-  'catalog-query': { id: 'catalog-query', kind: 'tool', parent: 'connect-agent', data: { id: 'catalog-query', owner: 'platform-team', version: '1.0.0', description: 'Query the system catalog.', effect: 'read', authScope: 'db:read' } },
-  'extract-ddl': { id: 'extract-ddl', kind: 'job', parent: 'connect-agent', data: { id: 'extract-ddl', owner: 'platform-team', version: '1.0.0', description: 'Extract the full DDL.', queue: 'migrations', timeoutSeconds: 3600, retries: 3 } },
-  // A second task, so Subject Area filtering is demonstrable.
-  'convert-ddl': { id: 'convert-ddl', kind: 'task', parent: null, data: { id: 'convert-ddl', label: 'Convert DDL to Aurora' } },
-  'ddl-converter': {
-    id: 'ddl-converter', kind: 'agent', parent: 'convert-ddl',
-    data: { id: 'ddl-converter', owner: 'platform-team', version: '1.0.0', responsibility: 'Convert MS SQL DDL into Aurora PostgreSQL DDL.', model: { ...DEFAULT_MODEL }, refusalConditions: ['Source DDL is empty.'], refusalEmits: 'refused', telemetry: [{ name: 'agent.convert.status', attributes: ['ok'] }] },
-  },
-};
-const SEED_EDGES = [
-  { id: 'e1', source: 'connect-agent', target: 'db-connect' },
-  { id: 'e2', source: 'connect-agent', target: 'catalog-query' },
-  { id: 'e3', source: 'connect-agent', target: 'extract-ddl' },
-];
+import { SEED_OBJECTS, SEED_EDGES, SEED_EXPANDED, SEED_SUBJECT_AREAS } from './seedModel';
 
 export default function UnifiedModeler() {
   const [objects, setObjects] = useState(SEED_OBJECTS);
   const [edges, setEdges] = useState(SEED_EDGES);
-  const [expanded, setExpanded] = useState({ 'ingest-mssql': true, 'connect-agent': false });
+  const [expanded, setExpanded] = useState(SEED_EXPANDED);
   const [selectedId, setSelectedId] = useState(null);
   const [focusReq, setFocusReq] = useState(null); // { id, n } — bump n to re-center
   // Chrome state
@@ -50,7 +28,7 @@ export default function UnifiedModeler() {
   const [panelOpen, setPanelOpen] = useState(true);
   const [modal, setModal] = useState(null); // 'settings' | 'about'
   // Subject Areas = saved views: { id, name, taskIds: [] }. null = whole model.
-  const [subjectAreas, setSubjectAreas] = useState([]);
+  const [subjectAreas, setSubjectAreas] = useState(SEED_SUBJECT_AREAS);
   const [currentSA, setCurrentSA] = useState(null);
   const [saEditor, setSaEditor] = useState(null); // { id, name, taskIds } being edited
   const [exportMsg, setExportMsg] = useState('');
@@ -75,12 +53,11 @@ export default function UnifiedModeler() {
   const allTasks = useMemo(() => Object.values(objects).filter((o) => o.kind === 'task'), [objects]);
 
   // ── Subject Area management ──
-  let saSeq = subjectAreas.length;
+  // Open the editor modal directly (name is typed IN the modal). Do NOT use
+  // window.prompt — Tauri's webview returns null from it, so the dialog never
+  // appeared and "New Subject Area" silently did nothing.
   const newSubjectArea = () => {
-    const name = window.prompt('Subject Area name:', '');
-    if (!name) return;
-    saSeq += 1;
-    setSaEditor({ id: `sa-${saSeq}`, name, taskIds: [] });
+    setSaEditor({ id: `sa-${Date.now().toString(36)}`, name: '', taskIds: [] });
   };
   const saveSubjectArea = (editor) => {
     setSubjectAreas((sas) => {
