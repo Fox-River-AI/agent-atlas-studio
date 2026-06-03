@@ -1,0 +1,91 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/Fox-River-AI/agent-atlas/main/registry/schema/agent.schema.json",
+  "title": "agent-atlas Agent manifest",
+  "description": "A declarative, versioned contract for one agent. OpenAPI in spirit, for agents.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["apiVersion", "kind", "id", "version", "owner", "responsibility", "model", "io", "tools", "refusal", "telemetry"],
+  "properties": {
+    "apiVersion": { "const": "agent-atlas/v1" },
+    "kind": { "const": "Agent" },
+    "id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]*$" },
+    "version": { "type": "string", "pattern": "^\\d+\\.\\d+\\.\\d+$" },
+    "owner": { "type": "string", "minLength": 1 },
+    "responsibility": {
+      "type": "string",
+      "minLength": 1,
+      "description": "A single responsibility. If you need the word 'and' to state it, you have two agents."
+    },
+    "model": {
+      "description": "Either a single pinned model (the default, reproducible case) OR a reference to a Router for dynamic model selection. Exactly one — never both.",
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["provider", "name", "pinned"],
+          "properties": {
+            "provider": { "type": "string" },
+            "name": { "type": "string" },
+            "pinned": { "type": "string", "description": "The exact, pinned model version." },
+            "parameters": { "type": "object" }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["router"],
+          "properties": {
+            "router": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]*$", "description": "id of a Router that selects the model dynamically." }
+          }
+        }
+      ]
+    },
+    "io": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["input", "output"],
+      "properties": {
+        "input": { "type": "string", "description": "Path to the typed input schema." },
+        "output": { "type": "string", "description": "Path to the typed output schema." }
+      }
+    },
+    "tools": {
+      "type": "array",
+      "description": "Allowlist of tool ids this agent may call. An empty list means none.",
+      "items": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]*$" },
+      "uniqueItems": true
+    },
+    "refusal": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["conditions"],
+      "description": "Refusal is a first-class output: the conditions under which the agent should decline rather than guess.",
+      "properties": {
+        "conditions": { "type": "array", "items": { "type": "string" }, "minItems": 1 },
+        "emits": { "type": "string", "description": "The output value that signals a refusal." }
+      }
+    },
+    "telemetry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["emits"],
+      "description": "The decisions this agent records, so 'why did it do that' is answerable.",
+      "properties": {
+        "emits": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["name"],
+            "properties": {
+              "name": { "type": "string" },
+              "attributes": { "type": "array", "items": { "type": "string" } }
+            }
+          }
+        }
+      }
+    }
+  }
+}

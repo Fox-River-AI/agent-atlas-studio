@@ -26,7 +26,7 @@ export default function PropertiesPanel({ node, onChange, errors }) {
 
   return (
     <div className="atlas-panel">
-      <h3>{{ agent: 'Agent', tool: 'MCP Tool', job: 'Job', system: 'External System' }[node.type] || node.type}</h3>
+      <h3>{{ agent: 'Agent', tool: 'MCP Tool', job: 'Job', system: 'External System', router: 'Router' }[node.type] || node.type}</h3>
 
       <Field label="id" hint="lowercase, hyphens; matches the manifest filename">
         <input value={d.id || ''} onChange={(e) => set({ id: e.target.value })} placeholder="intake-classifier" />
@@ -158,6 +158,62 @@ export default function PropertiesPanel({ node, onChange, errors }) {
           </Field>
           <Field label="auth scope" hint="optional">
             <input value={d.authScope || ''} onChange={(e) => set({ authScope: e.target.value })} placeholder="db:read" />
+          </Field>
+        </>
+      )}
+
+      {node.type === 'router' && (
+        <>
+          <Field label="description">
+            <textarea value={d.description || ''} onChange={(e) => set({ description: e.target.value })} rows={2} placeholder="Selects a model by task complexity, quality, latency, and cost." />
+          </Field>
+
+          <fieldset className="atlas-group">
+            <legend>candidate models</legend>
+            {(d.candidates || []).map((c, i) => (
+              <div key={i} className="atlas-router-cand">
+                <input
+                  value={c.provider || ''} placeholder="provider"
+                  onChange={(e) => set({ candidates: d.candidates.map((x, j) => (j === i ? { ...x, provider: e.target.value } : x)) })}
+                />
+                <input
+                  value={c.name || ''} placeholder="model name"
+                  onChange={(e) => set({ candidates: d.candidates.map((x, j) => (j === i ? { ...x, name: e.target.value } : x)) })}
+                />
+                <button className="atlas-row-del" title="Remove" onClick={() => set({ candidates: d.candidates.filter((_, j) => j !== i) })}>×</button>
+              </div>
+            ))}
+            <button className="atlas-row-add" onClick={() => set({ candidates: [...(d.candidates || []), { provider: '', name: '', pinned: '' }] })}>+ candidate</button>
+          </fieldset>
+
+          <Field label="optimize for" hint="comma-separated priority: quality, cost, latency">
+            <input
+              value={(d.optimizeFor || []).join(', ')}
+              onChange={(e) => set({ optimizeFor: e.target.value.split(',').map((s) => s.trim()).filter(Boolean) })}
+              placeholder="quality, cost, latency"
+            />
+          </Field>
+
+          <fieldset className="atlas-group">
+            <legend>routing rules</legend>
+            {(d.rules || []).map((r, i) => (
+              <div key={i} className="atlas-router-rule">
+                <input
+                  value={r.when || ''} placeholder="when (condition)"
+                  onChange={(e) => set({ rules: d.rules.map((x, j) => (j === i ? { ...x, when: e.target.value } : x)) })}
+                />
+                <input
+                  value={r.select || ''} placeholder="→ model name"
+                  onChange={(e) => set({ rules: d.rules.map((x, j) => (j === i ? { ...x, select: e.target.value } : x)) })}
+                />
+                <button className="atlas-row-del" title="Remove" onClick={() => set({ rules: d.rules.filter((_, j) => j !== i) })}>×</button>
+              </div>
+            ))}
+            <button className="atlas-row-add" onClick={() => set({ rules: [...(d.rules || []), { when: '', select: '' }] })}>+ rule</button>
+          </fieldset>
+
+          <Field label="fallback model" hint="used when no rule matches">
+            <input value={d.fallback || ''} onChange={(e) => set({ fallback: e.target.value })} placeholder="claude-opus-4-8" />
           </Field>
         </>
       )}

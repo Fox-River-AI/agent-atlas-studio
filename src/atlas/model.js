@@ -32,9 +32,22 @@ export function agentsUsingTool(toolId, nodes, edges) {
   return [...agentIds];
 }
 
+// An agent → router edge means "this agent routes via this router" (dynamic
+// model selection) instead of using a pinned model. Returns the router id or null.
+export function routerForAgent(agentId, nodes, edges) {
+  for (const e of edges) {
+    if (e.source === agentId) {
+      const target = nodes.find((n) => n.id === e.target);
+      if (target && target.type === 'router') return target.data.id;
+    }
+  }
+  return null;
+}
+
 // Build the agent manifest object from a node's data + the graph.
 export function agentManifest(node, nodes, edges) {
   const d = node.data;
+  const routerId = routerForAgent(node.id, nodes, edges);
   return {
     apiVersion: 'agent-atlas/v1',
     kind: 'Agent',
@@ -42,7 +55,8 @@ export function agentManifest(node, nodes, edges) {
     version: d.version || '1.0.0',
     owner: d.owner || '',
     responsibility: d.responsibility || '',
-    model: d.model,
+    // A router edge wins: the agent routes dynamically instead of a pinned model.
+    model: routerId ? { router: routerId } : d.model,
     io: {
       input: `registry/io/${d.id}.input.json`,
       output: `registry/io/${d.id}.output.json`,
@@ -108,6 +122,28 @@ export function systemManifest(node) {
   };
 }
 
+export function routerManifest(node) {
+  const d = node.data;
+  return {
+    apiVersion: 'agent-atlas/v1',
+    kind: 'Router',
+    id: d.id,
+    version: d.version || '1.0.0',
+    owner: d.owner || '',
+    ...(d.description ? { description: d.description } : {}),
+    candidates: (d.candidates || []).map((c) => ({
+      provider: c.provider || '',
+      name: c.name || '',
+      ...(c.pinned ? { pinned: c.pinned } : {}),
+    })),
+    policy: {
+      ...(d.optimizeFor && d.optimizeFor.length ? { optimize_for: d.optimizeFor } : {}),
+      ...(d.rules && d.rules.length ? { rules: d.rules.filter((r) => r.when && r.select) } : {}),
+      fallback: d.fallback || '',
+    },
+  };
+}
+
 // Build the manifest object for any node, dispatched by type.
 export function manifestFor(node, nodes, edges) {
   switch (node.type) {
@@ -115,6 +151,7 @@ export function manifestFor(node, nodes, edges) {
     case 'tool': return toolManifest(node, nodes, edges);
     case 'job': return jobManifest(node);
     case 'system': return systemManifest(node);
+    case 'router': return routerManifest(node);
     default: return null;
   }
 }
@@ -136,6 +173,7 @@ const REGISTRY_DIRS = {
   tool: { dir: 'tools', suffix: '.tool.yaml' },
   job: { dir: 'jobs', suffix: '.job.yaml' },
   system: { dir: 'systems', suffix: '.system.yaml' },
+  router: { dir: 'routers', suffix: '.router.yaml' },
 };
 
 // Produce the full registry as a map of relative path -> file contents (string).

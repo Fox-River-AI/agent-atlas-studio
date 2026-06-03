@@ -15,6 +15,7 @@ export const OBJECT_TYPES = [
   { type: 'orchestrator', label: 'Orchestrator', singular: true },
   { type: 'agent', label: 'Agents' },
   { type: 'tool', label: 'MCP Tools' },
+  { type: 'router', label: 'Routers' },
   { type: 'job', label: 'Jobs' },
   { type: 'system', label: 'Systems' },
 ];

@@ -140,6 +140,18 @@ export default function AtlasModeler() {
         return { ...common, description: '', queue: '', trigger: '', timeoutSeconds: '', retries: '' };
       case 'system':
         return { ...common, description: '', systemKind: 'relational-db', connection: '', authScope: '' };
+      case 'router':
+        return {
+          ...common,
+          description: '',
+          candidates: [
+            { provider: 'anthropic', name: 'claude-opus-4-8', pinned: '' },
+            { provider: 'openai', name: 'gpt-5', pinned: '' },
+          ],
+          optimizeFor: ['quality', 'cost'],
+          rules: [{ when: 'task_complexity == high', select: 'claude-opus-4-8' }],
+          fallback: 'claude-opus-4-8',
+        };
       default:
         return common;
     }

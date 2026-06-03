@@ -73,4 +73,20 @@ export function SystemNode({ data, selected }) {
   );
 }
 
-export const nodeTypes = { agent: AgentNode, tool: ToolNode, job: JobNode, system: SystemNode };
+export function RouterNode({ data, selected }) {
+  const count = (data.candidates || []).length;
+  return (
+    <div className={`atlas-node router ${selected ? 'selected' : ''}`}>
+      <div className="atlas-node-head">
+        <span className="atlas-kind">ROUTER</span>
+        <ValidityDot valid={data.valid} />
+      </div>
+      <div className="atlas-node-id">{data.id || '(unnamed)'}</div>
+      <div className="atlas-node-sub">{count} model{count === 1 ? '' : 's'}{data.fallback ? ` · ↘ ${data.fallback}` : ''}</div>
+      {/* Agents route via a router — it receives edges on the left. */}
+      <Handle type="target" position={Position.Left} />
+    </div>
+  );
+}
+
+export const nodeTypes = { agent: AgentNode, tool: ToolNode, job: JobNode, system: SystemNode, router: RouterNode };

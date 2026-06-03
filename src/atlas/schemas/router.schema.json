@@ -1,0 +1,60 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/Fox-River-AI/agent-atlas/main/registry/schema/router.schema.json",
+  "title": "agent-atlas Router (Model Policy) manifest",
+  "description": "A model-routing policy: dynamically selects among candidate LLMs (e.g. Claude, OpenAI, Azure OpenAI) by task complexity, output quality, latency, and cost. An agent references a Router instead of a single pinned model when its model choice is dynamic.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["apiVersion", "kind", "id", "version", "owner", "candidates", "policy"],
+  "properties": {
+    "apiVersion": { "const": "agent-atlas/v1" },
+    "kind": { "const": "Router" },
+    "id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]*$" },
+    "version": { "type": "string", "pattern": "^\\d+\\.\\d+\\.\\d+$" },
+    "owner": { "type": "string", "minLength": 1 },
+    "description": { "type": "string" },
+    "candidates": {
+      "type": "array",
+      "minItems": 1,
+      "description": "The models this router may select among. Held as data on the router (not separate objects).",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["provider", "name"],
+        "properties": {
+          "provider": { "type": "string", "description": "e.g. anthropic, openai, azure-openai." },
+          "name": { "type": "string" },
+          "pinned": { "type": "string", "description": "exact pinned version of this candidate." }
+        }
+      }
+    },
+    "policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["fallback"],
+      "description": "How the router chooses. Rules are evaluated in order; fallback is used when none match.",
+      "properties": {
+        "optimize_for": {
+          "type": "array",
+          "description": "Priority order of objectives.",
+          "items": { "enum": ["quality", "cost", "latency"] },
+          "uniqueItems": true
+        },
+        "rules": {
+          "type": "array",
+          "description": "Ordered routing rules: when <condition> select <model name>.",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["when", "select"],
+            "properties": {
+              "when": { "type": "string", "description": "condition, e.g. 'task_complexity == high'." },
+              "select": { "type": "string", "description": "candidate model name to route to." }
+            }
+          }
+        },
+        "fallback": { "type": "string", "description": "candidate model name used when no rule matches." }
+      }
+    }
+  }
+}
