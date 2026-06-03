@@ -34,6 +34,8 @@ export default function ObjectPalette({
   onDragInstanceStart,
   collapsed,
   onToggleCollapse,
+  onOpenSettings,
+  onOpenAbout,
 }) {
   const [openGroups, setOpenGroups] = useState(() =>
     Object.fromEntries(OBJECT_TYPES.map((t) => [t.type, true]))
@@ -135,6 +137,14 @@ export default function ObjectPalette({
           </button>
         </div>
       )}
+
+      {/* ── footer (pinned bottom): About / Settings / Collapse ── */}
+      <div className="atlas-palette-spacer" />
+      <div className="atlas-palette-footer">
+        <button className="atlas-footer-item" onClick={onOpenAbout}>ⓘ About</button>
+        <button className="atlas-footer-item" onClick={onOpenSettings}>⚙ Settings</button>
+        <button className="atlas-footer-item" onClick={onToggleCollapse}>⟨ Collapse</button>
+      </div>
     </div>
   );
 }

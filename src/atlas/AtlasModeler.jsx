@@ -17,6 +17,7 @@ import JSZip from 'jszip';
 import { nodeTypes } from './nodes';
 import PropertiesPanel from './PropertiesPanel';
 import ObjectPalette from './ObjectPalette';
+import { SettingsModal, AboutModal } from './Modals';
 import { DEFAULT_MODEL } from './schema';
 import { buildRegistry, validateModel, crossChecks } from './model';
 import './atlas.css';
@@ -71,6 +72,7 @@ export default function AtlasModeler() {
   // Persistence of named SAs is a follow-up; the selector + "All" work now.
   const [subjectAreas] = useState([]);
   const [currentSA, setCurrentSA] = useState(null);
+  const [modal, setModal] = useState(null); // 'settings' | 'about' | null
 
   // Live validation: recompute per-node schema problems whenever the model changes.
   const problems = useMemo(() => validateModel(nodes, edges), [nodes, edges]);
@@ -200,6 +202,8 @@ export default function AtlasModeler() {
             onDragInstanceStart={onDragInstanceStart}
             collapsed={paletteCollapsed}
             onToggleCollapse={() => setPaletteCollapsed((c) => !c)}
+            onOpenSettings={() => setModal('settings')}
+            onOpenAbout={() => setModal('about')}
           />
           <div className="atlas-canvas" onDrop={onCanvasDrop} onDragOver={onCanvasDragOver}>
             <ReactFlow
@@ -220,6 +224,9 @@ export default function AtlasModeler() {
             <PropertiesPanel node={selectedNode} onChange={updateNode} errors={selectedNode ? problems[selectedNode.id] : null} />
           )}
         </div>
+
+        {modal === 'settings' && <SettingsModal onClose={() => setModal(null)} />}
+        {modal === 'about' && <AboutModal onClose={() => setModal(null)} />}
     </div>
   );
 }
