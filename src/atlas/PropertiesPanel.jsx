@@ -26,7 +26,7 @@ export default function PropertiesPanel({ node, onChange, errors }) {
 
   return (
     <div className="atlas-panel">
-      <h3>{node.type === 'agent' ? 'Agent' : 'Tool'}</h3>
+      <h3>{{ agent: 'Agent', tool: 'MCP Tool', job: 'Job', system: 'External System' }[node.type] || node.type}</h3>
 
       <Field label="id" hint="lowercase, hyphens; matches the manifest filename">
         <input value={d.id || ''} onChange={(e) => set({ id: e.target.value })} placeholder="intake-classifier" />
@@ -112,6 +112,52 @@ export default function PropertiesPanel({ node, onChange, errors }) {
           </Field>
           <Field label="rate limit (per minute)" hint="optional">
             <input type="number" value={d.ratePerMinute || ''} onChange={(e) => set({ ratePerMinute: e.target.value })} placeholder="60" />
+          </Field>
+        </>
+      )}
+
+      {node.type === 'job' && (
+        <>
+          <Field label="description">
+            <textarea value={d.description || ''} onChange={(e) => set({ description: e.target.value })} rows={2} placeholder="Extract the full DDL for the source database." />
+          </Field>
+          <Field label="queue" hint="the task queue this job is dispatched to">
+            <input value={d.queue || ''} onChange={(e) => set({ queue: e.target.value })} placeholder="migrations" />
+          </Field>
+          <Field label="trigger" hint="id of the tool/agent that enqueues it (optional)">
+            <input value={d.trigger || ''} onChange={(e) => set({ trigger: e.target.value })} placeholder="extract-ddl" />
+          </Field>
+          <Field label="timeout (seconds)" hint="optional">
+            <input type="number" value={d.timeoutSeconds || ''} onChange={(e) => set({ timeoutSeconds: e.target.value })} placeholder="3600" />
+          </Field>
+          <Field label="retries" hint="optional">
+            <input type="number" value={d.retries ?? ''} onChange={(e) => set({ retries: e.target.value })} placeholder="3" />
+          </Field>
+        </>
+      )}
+
+      {node.type === 'system' && (
+        <>
+          <Field label="description">
+            <textarea value={d.description || ''} onChange={(e) => set({ description: e.target.value })} rows={2} placeholder="Source MS SQL Server holding the legacy schema." />
+          </Field>
+          <Field label="kind" hint="the class of system — drives the data/knowledge layer view">
+            <select value={d.systemKind || 'relational-db'} onChange={(e) => set({ systemKind: e.target.value })}>
+              <option value="relational-db">relational-db</option>
+              <option value="vector-store">vector-store</option>
+              <option value="graph-db">graph-db</option>
+              <option value="document-store">document-store</option>
+              <option value="fhir">fhir</option>
+              <option value="state-store">state-store</option>
+              <option value="external-api">external-api</option>
+              <option value="other">other</option>
+            </select>
+          </Field>
+          <Field label="connection" hint="host/endpoint hint — not secrets">
+            <input value={d.connection || ''} onChange={(e) => set({ connection: e.target.value })} placeholder="mssql://host:1433/legacy" />
+          </Field>
+          <Field label="auth scope" hint="optional">
+            <input value={d.authScope || ''} onChange={(e) => set({ authScope: e.target.value })} placeholder="db:read" />
           </Field>
         </>
       )}

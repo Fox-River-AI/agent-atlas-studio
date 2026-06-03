@@ -97,10 +97,21 @@ export default function AtlasModeler() {
     if (id) setPanelOpen(true);
   }, []);
 
-  const blankData = (type) =>
-    type === 'agent'
-      ? { id: '', owner: '', version: '1.0.0', responsibility: '', model: { ...DEFAULT_MODEL }, refusalConditions: [], refusalEmits: 'refused', telemetry: [{ name: '', attributes: [] }] }
-      : { id: '', owner: '', version: '1.0.0', description: '', effect: 'read', authScope: '' };
+  const blankData = (type) => {
+    const common = { id: '', owner: '', version: '1.0.0' };
+    switch (type) {
+      case 'agent':
+        return { ...common, responsibility: '', model: { ...DEFAULT_MODEL }, refusalConditions: [], refusalEmits: 'refused', telemetry: [{ name: '', attributes: [] }] };
+      case 'tool':
+        return { ...common, description: '', effect: 'read', authScope: '' };
+      case 'job':
+        return { ...common, description: '', queue: '', trigger: '', timeoutSeconds: '', retries: '' };
+      case 'system':
+        return { ...common, description: '', systemKind: 'relational-db', connection: '', authScope: '' };
+      default:
+        return common;
+    }
+  };
 
   // Create a new object of `type` at an optional drop position; select it so the
   // properties panel opens ready to edit.

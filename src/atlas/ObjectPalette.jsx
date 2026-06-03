@@ -138,12 +138,11 @@ export default function ObjectPalette({
         </div>
       )}
 
-      {/* ── footer (pinned bottom): About / Settings / Collapse ── */}
+      {/* ── footer (pinned bottom): About / Settings (collapse is the header chevron) ── */}
       <div className="atlas-palette-spacer" />
       <div className="atlas-palette-footer">
         <button className="atlas-footer-item" onClick={onOpenAbout}>ⓘ About</button>
         <button className="atlas-footer-item" onClick={onOpenSettings}>⚙ Settings</button>
-        <button className="atlas-footer-item" onClick={onToggleCollapse}>⟨ Collapse</button>
       </div>
     </div>
   );

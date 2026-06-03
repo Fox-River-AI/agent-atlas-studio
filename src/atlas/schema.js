@@ -11,13 +11,27 @@ import Ajv from 'ajv/dist/2020';
 // one copy of the schema, no drift, no symlink hack (unlike CRA).
 import agentSchema from '../../vendor/agent-atlas/registry/schema/agent.schema.json';
 import toolSchema from '../../vendor/agent-atlas/registry/schema/tool.schema.json';
+// Job + System are prototyped in the studio for fast iteration; once proven
+// in the UI they get upstreamed to agent-atlas as canonical schemas.
+import jobSchema from './schemas/job.schema.json';
+import systemSchema from './schemas/system.schema.json';
 
 const ajv = new Ajv({ allErrors: true, strict: false });
 
 export const validateAgent = ajv.compile(agentSchema);
 export const validateTool = ajv.compile(toolSchema);
+export const validateJob = ajv.compile(jobSchema);
+export const validateSystem = ajv.compile(systemSchema);
 
-export { agentSchema, toolSchema };
+// Per-node-type validator lookup, so the model layer stays generic.
+export const VALIDATORS = {
+  agent: validateAgent,
+  tool: validateTool,
+  job: validateJob,
+  system: validateSystem,
+};
+
+export { agentSchema, toolSchema, jobSchema, systemSchema };
 
 // The model+pinned version a freshly-dropped agent starts with. Mirrors the
 // example manifest in the submodule so a new model validates as soon as the

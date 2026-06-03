@@ -3,7 +3,7 @@
 // satisfy agent-atlas's own governance/ci/validate_registry.py, so the same
 // deterministic checks that gate the OSS repo also gate what this UI produces.
 import yaml from 'js-yaml';
-import { validateAgent, validateTool, formatErrors } from './schema';
+import { VALIDATORS, formatErrors } from './schema';
 
 // Edges encode "agent allowlists tool": source = agent node, target = tool node.
 export function toolsForAgent(agentId, nodes, edges) {
@@ -77,6 +77,48 @@ export function toolManifest(node, nodes, edges) {
   };
 }
 
+export function jobManifest(node) {
+  const d = node.data;
+  return {
+    apiVersion: 'agent-atlas/v1',
+    kind: 'Job',
+    id: d.id,
+    version: d.version || '1.0.0',
+    owner: d.owner || '',
+    ...(d.description ? { description: d.description } : {}),
+    queue: d.queue || '',
+    ...(d.trigger ? { trigger: d.trigger } : {}),
+    ...(d.timeoutSeconds ? { timeout_seconds: Number(d.timeoutSeconds) } : {}),
+    ...(d.retries != null && d.retries !== '' ? { retries: Number(d.retries) } : {}),
+  };
+}
+
+export function systemManifest(node) {
+  const d = node.data;
+  return {
+    apiVersion: 'agent-atlas/v1',
+    kind: 'System',
+    id: d.id,
+    version: d.version || '1.0.0',
+    owner: d.owner || '',
+    ...(d.description ? { description: d.description } : {}),
+    systemKind: d.systemKind || 'other',
+    ...(d.connection ? { connection: d.connection } : {}),
+    ...(d.authScope ? { auth: { scope: d.authScope } } : {}),
+  };
+}
+
+// Build the manifest object for any node, dispatched by type.
+export function manifestFor(node, nodes, edges) {
+  switch (node.type) {
+    case 'agent': return agentManifest(node, nodes, edges);
+    case 'tool': return toolManifest(node, nodes, edges);
+    case 'job': return jobManifest(node);
+    case 'system': return systemManifest(node);
+    default: return null;
+  }
+}
+
 // A minimal but valid JSON Schema stub for an agent's input/output, so the
 // declared io.* files actually exist (validate_registry.py check #6).
 function ioStub(title) {
@@ -88,35 +130,39 @@ function ioStub(title) {
   };
 }
 
+// Where each node type's manifest is written, and its file suffix.
+const REGISTRY_DIRS = {
+  agent: { dir: 'agents', suffix: '.agent.yaml' },
+  tool: { dir: 'tools', suffix: '.tool.yaml' },
+  job: { dir: 'jobs', suffix: '.job.yaml' },
+  system: { dir: 'systems', suffix: '.system.yaml' },
+};
+
 // Produce the full registry as a map of relative path -> file contents (string).
 export function buildRegistry(nodes, edges) {
   const files = {};
   for (const node of nodes) {
+    const loc = REGISTRY_DIRS[node.type];
+    const m = manifestFor(node, nodes, edges);
+    if (!loc || !m) continue;
+    files[`registry/${loc.dir}/${m.id}${loc.suffix}`] = yaml.dump(m, { lineWidth: 100, noRefs: true });
     if (node.type === 'agent') {
-      const m = agentManifest(node, nodes, edges);
-      files[`registry/agents/${m.id}.agent.yaml`] = yaml.dump(m, { lineWidth: 100, noRefs: true });
       files[`registry/io/${m.id}.input.json`] = JSON.stringify(ioStub(`${m.id} input`), null, 2) + '\n';
       files[`registry/io/${m.id}.output.json`] = JSON.stringify(ioStub(`${m.id} output`), null, 2) + '\n';
-    } else if (node.type === 'tool') {
-      const m = toolManifest(node, nodes, edges);
-      files[`registry/tools/${m.id}.tool.yaml`] = yaml.dump(m, { lineWidth: 100, noRefs: true });
     }
   }
   return files;
 }
 
-// Validate every node against the JSON schema (the same schema the CI validator
-// uses). Returns { nodeId: [errors] } for nodes that fail. Empty = all valid.
+// Validate every node against its JSON schema. Returns { nodeId: [errors] } for
+// nodes that fail. Empty = all valid.
 export function validateModel(nodes, edges) {
   const problems = {};
   for (const node of nodes) {
-    if (node.type === 'agent') {
-      const m = agentManifest(node, nodes, edges);
-      if (!validateAgent(m)) problems[node.id] = formatErrors(validateAgent.errors);
-    } else if (node.type === 'tool') {
-      const m = toolManifest(node, nodes, edges);
-      if (!validateTool(m)) problems[node.id] = formatErrors(validateTool.errors);
-    }
+    const validator = VALIDATORS[node.type];
+    const m = manifestFor(node, nodes, edges);
+    if (!validator || !m) continue;
+    if (!validator(m)) problems[node.id] = formatErrors(validator.errors);
   }
   return problems;
 }

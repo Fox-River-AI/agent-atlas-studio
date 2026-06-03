@@ -43,4 +43,34 @@ export function ToolNode({ data, selected }) {
   );
 }
 
-export const nodeTypes = { agent: AgentNode, tool: ToolNode };
+export function JobNode({ data, selected }) {
+  return (
+    <div className={`atlas-node job ${selected ? 'selected' : ''}`}>
+      <div className="atlas-node-head">
+        <span className="atlas-kind">JOB</span>
+        <ValidityDot valid={data.valid} />
+      </div>
+      <div className="atlas-node-id">{data.id || '(unnamed)'}</div>
+      <div className="atlas-node-sub">queue: {data.queue || '—'}</div>
+      {/* Jobs are dispatched to — they receive edges on the left. */}
+      <Handle type="target" position={Position.Left} />
+    </div>
+  );
+}
+
+export function SystemNode({ data, selected }) {
+  return (
+    <div className={`atlas-node system ${selected ? 'selected' : ''}`}>
+      <div className="atlas-node-head">
+        <span className="atlas-kind">SYSTEM</span>
+        <ValidityDot valid={data.valid} />
+      </div>
+      <div className="atlas-node-id">{data.id || '(unnamed)'}</div>
+      <div className="atlas-node-sub">{data.systemKind || 'other'}</div>
+      {/* Systems are connected to — they receive edges on the left. */}
+      <Handle type="target" position={Position.Left} />
+    </div>
+  );
+}
+
+export const nodeTypes = { agent: AgentNode, tool: ToolNode, job: JobNode, system: SystemNode };
