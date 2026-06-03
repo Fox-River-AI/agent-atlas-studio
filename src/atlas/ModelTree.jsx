@@ -50,7 +50,7 @@ function TreeRow({ obj, objects, depth, expanded, onToggle, selectedId, onSelect
 
 export default function ModelTree({
   objects, expanded, onToggle, selectedId, onSelect, validityById,
-  subjectAreas, currentSA, onSelectSA, onNewSA,
+  subjectAreas, currentSA, onSelectSA, onNewSA, onEditSA,
   onCreate, collapsed, onToggleCollapse, onOpenSettings, onOpenAbout,
 }) {
   const roots = useMemo(
@@ -81,7 +81,10 @@ export default function ModelTree({
           <option value="">All (whole model)</option>
           {(subjectAreas || []).map((sa) => <option key={sa.id} value={sa.id}>{sa.name}</option>)}
         </select>
-        <button className="atlas-sa-new" onClick={onNewSA}>+ New Subject Area</button>
+        <div className="atlas-sa-links">
+          <button className="atlas-sa-new" onClick={onNewSA}>+ New Subject Area</button>
+          {currentSA && <button className="atlas-sa-new" onClick={onEditSA}>Edit current</button>}
+        </div>
       </div>
 
       <div className="atlas-tree-add">

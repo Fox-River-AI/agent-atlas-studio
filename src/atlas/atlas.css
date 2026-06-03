@@ -101,8 +101,12 @@
   background: var(--bg-input); color: var(--text); border: 1px solid var(--border); border-radius: 5px;
   padding: 0.35rem 0.5rem; font-size: 0.9rem;
 }
+.atlas-sa-links { display: flex; gap: 0.75rem; }
 .atlas-sa-new { background: none; border: none; color: var(--agent); font-size: 0.85rem; text-align: left; cursor: pointer; padding: 0.15rem 0; }
 .atlas-sa-new:hover { filter: brightness(1.2); }
+.atlas-sa-name { background: var(--bg-input); color: var(--text); border: 1px solid var(--border); border-radius: 5px; padding: 0.4rem 0.5rem; font-size: 0.9rem; width: 100%; }
+.atlas-sa-check { display: flex; align-items: center; gap: 0.5rem; padding: 0.25rem 0; font-size: 0.9rem; cursor: pointer; }
+.atlas-sa-check input { accent-color: var(--accent); }
 
 /* footer pins to the bottom of the palette */
 .atlas-palette-spacer { flex: 1; }

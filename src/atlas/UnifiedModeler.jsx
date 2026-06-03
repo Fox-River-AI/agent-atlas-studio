@@ -26,6 +26,12 @@ const SEED_OBJECTS = {
   'db-connect': { id: 'db-connect', kind: 'tool', parent: 'connect-agent', data: { id: 'db-connect', owner: 'platform-team', version: '1.0.0', description: 'Open a connection to the source DB.', effect: 'read', authScope: 'db:read' } },
   'catalog-query': { id: 'catalog-query', kind: 'tool', parent: 'connect-agent', data: { id: 'catalog-query', owner: 'platform-team', version: '1.0.0', description: 'Query the system catalog.', effect: 'read', authScope: 'db:read' } },
   'extract-ddl': { id: 'extract-ddl', kind: 'job', parent: 'connect-agent', data: { id: 'extract-ddl', owner: 'platform-team', version: '1.0.0', description: 'Extract the full DDL.', queue: 'migrations', timeoutSeconds: 3600, retries: 3 } },
+  // A second task, so Subject Area filtering is demonstrable.
+  'convert-ddl': { id: 'convert-ddl', kind: 'task', parent: null, data: { id: 'convert-ddl', label: 'Convert DDL to Aurora' } },
+  'ddl-converter': {
+    id: 'ddl-converter', kind: 'agent', parent: 'convert-ddl',
+    data: { id: 'ddl-converter', owner: 'platform-team', version: '1.0.0', responsibility: 'Convert MS SQL DDL into Aurora PostgreSQL DDL.', model: { ...DEFAULT_MODEL }, refusalConditions: ['Source DDL is empty.'], refusalEmits: 'refused', telemetry: [{ name: 'agent.convert.status', attributes: ['ok'] }] },
+  },
 };
 const SEED_EDGES = [
   { id: 'e1', source: 'connect-agent', target: 'db-connect' },
@@ -43,11 +49,48 @@ export default function UnifiedModeler() {
   const [treeCollapsed, setTreeCollapsed] = useState(false);
   const [panelOpen, setPanelOpen] = useState(true);
   const [modal, setModal] = useState(null); // 'settings' | 'about'
-  const [subjectAreas] = useState([]); // wired in Step 3
+  // Subject Areas = saved views: { id, name, taskIds: [] }. null = whole model.
+  const [subjectAreas, setSubjectAreas] = useState([]);
   const [currentSA, setCurrentSA] = useState(null);
+  const [saEditor, setSaEditor] = useState(null); // { id, name, taskIds } being edited
   const [exportMsg, setExportMsg] = useState('');
 
   const toggleExpand = useCallback((id) => setExpanded((e) => ({ ...e, [id]: !e[id] })), []);
+
+  // The current SA's visible object ids = its tasks + everything nested under
+  // them (descendants via the parent chain). null SA = the whole model.
+  const sa = currentSA ? subjectAreas.find((s) => s.id === currentSA) : null;
+  const visibleObjects = useMemo(() => {
+    if (!sa) return objects;
+    const childrenByParent = {};
+    for (const o of Object.values(objects)) {
+      if (o.parent) (childrenByParent[o.parent] ||= []).push(o.id);
+    }
+    const keep = new Set();
+    const walk = (id) => { if (keep.has(id) || !objects[id]) return; keep.add(id); (childrenByParent[id] || []).forEach(walk); };
+    sa.taskIds.forEach(walk);
+    return Object.fromEntries(Object.entries(objects).filter(([id]) => keep.has(id)));
+  }, [objects, sa]);
+
+  const allTasks = useMemo(() => Object.values(objects).filter((o) => o.kind === 'task'), [objects]);
+
+  // ── Subject Area management ──
+  let saSeq = subjectAreas.length;
+  const newSubjectArea = () => {
+    const name = window.prompt('Subject Area name:', '');
+    if (!name) return;
+    saSeq += 1;
+    setSaEditor({ id: `sa-${saSeq}`, name, taskIds: [] });
+  };
+  const saveSubjectArea = (editor) => {
+    setSubjectAreas((sas) => {
+      const exists = sas.some((s) => s.id === editor.id);
+      return exists ? sas.map((s) => (s.id === editor.id ? editor : s)) : [...sas, editor];
+    });
+    setCurrentSA(editor.id);
+    setSaEditor(null);
+  };
+  const editCurrentSA = () => { if (sa) setSaEditor({ ...sa }); };
 
   // The unified objects, in the {id,type,data} node shape buildRegistry/manifestFor expect.
   const asNodes = useMemo(
@@ -211,7 +254,7 @@ export default function UnifiedModeler() {
 
       <div className="atlas-body">
         <ModelTree
-          objects={objects}
+          objects={visibleObjects}
           expanded={expanded}
           onToggle={toggleExpand}
           selectedId={selectedId}
@@ -220,7 +263,8 @@ export default function UnifiedModeler() {
           subjectAreas={subjectAreas}
           currentSA={currentSA}
           onSelectSA={setCurrentSA}
-          onNewSA={() => setExportMsg('Subject Areas (saved views) are coming next.')}
+          onNewSA={newSubjectArea}
+          onEditSA={editCurrentSA}
           onCreate={createObject}
           collapsed={treeCollapsed}
           onToggleCollapse={() => setTreeCollapsed((c) => !c)}
@@ -228,7 +272,7 @@ export default function UnifiedModeler() {
           onOpenAbout={() => setModal('about')}
         />
         <UnifiedGraph
-          objects={objects}
+          objects={visibleObjects}
           edges={edges}
           expanded={expanded}
           onToggleExpand={toggleExpand}
@@ -241,8 +285,55 @@ export default function UnifiedModeler() {
         {panelOpen && <PropertiesPanel node={selectedNode} onChange={updateSelected} errors={selectedErrors} />}
       </div>
 
+      {saEditor && (
+        <SAEditor
+          editor={saEditor}
+          allTasks={allTasks}
+          onChange={setSaEditor}
+          onSave={() => saveSubjectArea(saEditor)}
+          onCancel={() => setSaEditor(null)}
+        />
+      )}
       {modal === 'settings' && <SettingsModal onClose={() => setModal(null)} />}
       {modal === 'about' && <AboutModal onClose={() => setModal(null)} />}
+    </div>
+  );
+}
+
+// Modal to name a Subject Area and choose which tasks belong to it.
+function SAEditor({ editor, allTasks, onChange, onSave, onCancel }) {
+  const toggle = (taskId) => {
+    const has = editor.taskIds.includes(taskId);
+    onChange({ ...editor, taskIds: has ? editor.taskIds.filter((t) => t !== taskId) : [...editor.taskIds, taskId] });
+  };
+  return (
+    <div className="atlas-modal-backdrop" onClick={onCancel}>
+      <div className="atlas-modal" onClick={(e) => e.stopPropagation()} autoCapitalize="off" autoCorrect="off" spellCheck={false}>
+        <h2>Subject Area</h2>
+        <div className="atlas-modal-row">
+          <label>Name</label>
+          <input
+            className="atlas-sa-name"
+            value={editor.name}
+            onChange={(e) => onChange({ ...editor, name: e.target.value })}
+            placeholder="MS SQL → Aurora migration"
+          />
+        </div>
+        <div className="atlas-modal-row">
+          <label>Tasks in this view</label>
+          {allTasks.length === 0 && <div className="atlas-empty">No tasks in the model yet.</div>}
+          {allTasks.map((t) => (
+            <label key={t.id} className="atlas-sa-check">
+              <input type="checkbox" checked={editor.taskIds.includes(t.id)} onChange={() => toggle(t.id)} />
+              <span>{t.data?.label || t.data?.id || t.id}</span>
+            </label>
+          ))}
+        </div>
+        <div className="atlas-modal-actions">
+          <button className="atlas-slider-reset" onClick={onCancel}>Cancel</button>
+          <button onClick={onSave} disabled={!editor.name}>Save</button>
+        </div>
+      </div>
     </div>
   );
 }
