@@ -17,7 +17,7 @@ import JSZip from 'jszip';
 import { nodeTypes } from './nodes';
 import PropertiesPanel from './PropertiesPanel';
 import ObjectPalette from './ObjectPalette';
-import OrchestrationView from './OrchestrationView';
+import { TaskFlowView, TaskDetailView } from './Orchestration';
 import { SettingsModal, AboutModal } from './Modals';
 import { DEFAULT_MODEL } from './schema';
 import { buildRegistry, validateModel, crossChecks } from './model';
@@ -74,27 +74,37 @@ export default function AtlasModeler() {
   const [subjectAreas] = useState([]);
   const [currentSA, setCurrentSA] = useState(null);
   const [modal, setModal] = useState(null); // 'settings' | 'about' | null
-  // Orchestration mode: when true, the canvas shows the control-flow view (tasks
-  // only), not the component graph. Tasks + their transitions live here.
-  const [orchestrationMode, setOrchestrationMode] = useState(false);
-  const [taskNodes, setTaskNodes] = useState([]);
-  const [taskEdges, setTaskEdges] = useState([]);
-  const [selectedTaskId, setSelectedTaskId] = useState(null);
-  let taskSeq = taskNodes.length;
-  const addTask = () => {
-    taskSeq += 1;
-    const id = `task-${taskSeq}`;
-    setTaskNodes((ts) => [
-      ...ts,
-      { id, type: 'task', position: { x: 120 + (ts.length * 60) % 360, y: 100 + (ts.length * 70) % 280 }, data: { id, invokes: '' } },
-    ]);
+
+  // ── Orchestration: two-level model ──
+  // mode: 'component' (default) | 'tasks' (the outer task-level DAG) | 'task' (one task's inner DAG)
+  // Each task is a high-level step with its OWN inner component DAG (nodes+edges).
+  // Tasks are also ordered among themselves via taskFlowEdges (the outer DAG).
+  const [orchMode, setOrchMode] = useState('component');
+  const [tasks, setTasks] = useState([]); // [{id,label,position,nodes:[],edges:[]}]
+  const [taskFlowEdges, setTaskFlowEdges] = useState([]); // edges between tasks
+  const [openTaskId, setOpenTaskId] = useState(null); // which task's inner canvas is open
+
+  const addTask = (label) => {
+    const n = tasks.length + 1;
+    const id = (label || `task-${n}`).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || `task-${n}`;
+    const task = {
+      id,
+      label: label || `task-${n}`,
+      position: { x: 140 + (tasks.length * 70) % 420, y: 120 + (tasks.length * 80) % 300 },
+      nodes: [],
+      edges: [],
+    };
+    setTasks((ts) => [...ts, task]);
+    return id;
   };
-  const deleteSelectedTask = () => {
-    if (!selectedTaskId) return;
-    setTaskNodes((ts) => ts.filter((t) => t.id !== selectedTaskId));
-    setTaskEdges((es) => es.filter((e) => e.source !== selectedTaskId && e.target !== selectedTaskId));
-    setSelectedTaskId(null);
+  const deleteTask = (taskId) => {
+    setTasks((ts) => ts.filter((t) => t.id !== taskId));
+    setTaskFlowEdges((es) => es.filter((e) => e.source !== taskId && e.target !== taskId));
+    if (openTaskId === taskId) { setOpenTaskId(null); setOrchMode('tasks'); }
   };
+  // Update one task's inner graph (nodes/edges) immutably.
+  const updateTaskGraph = (taskId, patch) =>
+    setTasks((ts) => ts.map((t) => (t.id === taskId ? { ...t, ...patch } : t)));
 
   // Live validation: recompute per-node schema problems whenever the model changes.
   const problems = useMemo(() => validateModel(nodes, edges), [nodes, edges]);
@@ -135,22 +145,29 @@ export default function AtlasModeler() {
     }
   };
 
-  // Create a new object of `type` at an optional drop position; select it so the
-  // properties panel opens ready to edit.
-  const addNode = (type, position) => {
+  // Create a new object of `type` at an optional drop position. `presetId` is
+  // used when a stub is created from the orchestration canvas: the component's
+  // id is pre-filled (so it's referenceable) but otherwise blank, so it shows
+  // as incomplete in the library until fully defined. Returns the new node id.
+  const addNode = (type, position, presetId) => {
     const key = nextKey();
-    const id = `n-${type}-${key}`;
+    const nodeId = `n-${type}-${key}`;
+    const data = { ...blankData(type), ...(presetId ? { id: presetId } : {}) };
     setNodes((nds) => [
       ...nds,
       {
-        id,
+        id: nodeId,
         type,
         position: position || { x: 200 + (Math.round(seq * 12) % 200), y: 80 + ((seq * 40) % 240) },
-        data: blankData(type),
+        data,
       },
     ]);
-    setSelectedId(id);
-    setPanelOpen(true);
+    // Only grab focus when authored directly in the component view.
+    if (!presetId) {
+      setSelectedId(nodeId);
+      setPanelOpen(true);
+    }
+    return nodeId;
   };
 
   // Drag an existing instance from the palette → re-focus it on the canvas.
@@ -201,13 +218,20 @@ export default function AtlasModeler() {
     <div className="atlas-page">
         <div className="atlas-toolbar">
           <h1>Agent Atlas — Modeler</h1>
-          {orchestrationMode ? (
+          {orchMode === 'tasks' && (
             <div className="atlas-actions">
-              <button onClick={() => setOrchestrationMode(false)}>⟵ Component view</button>
-              <button onClick={addTask}>+ Task</button>
-              <button onClick={deleteSelectedTask} disabled={!selectedTaskId}>Delete task</button>
+              <button onClick={() => setOrchMode('component')}>⟵ Component view</button>
+              <button onClick={() => addTask()}>+ Task</button>
+              <span className="atlas-orch-hint">{tasks.length} task(s) · drag task → task to order them</span>
             </div>
-          ) : (
+          )}
+          {orchMode === 'task' && (
+            <div className="atlas-actions">
+              <button onClick={() => { setOrchMode('tasks'); setOpenTaskId(null); }}>⟵ All tasks</button>
+              <span className="atlas-orch-title">{tasks.find((t) => t.id === openTaskId)?.label || openTaskId}</span>
+            </div>
+          )}
+          {orchMode === 'component' && (
             <div className="atlas-actions">
               <button onClick={() => addNode('agent')}>+ Agent</button>
               <button onClick={() => addNode('tool')}>+ Tool</button>
@@ -239,25 +263,21 @@ export default function AtlasModeler() {
             onSelectSA={setCurrentSA}
             onNewSA={() => setExportMsg('Subject Areas (saved views) are coming soon.')}
             onCreate={addNode}
-            onSelectInstance={(id) => { setOrchestrationMode(false); setSelectedId(id); setPanelOpen(true); }}
+            onSelectInstance={(id) => { setOrchMode('component'); setSelectedId(id); setPanelOpen(true); }}
             onDragInstanceStart={onDragInstanceStart}
             collapsed={paletteCollapsed}
             onToggleCollapse={() => setPaletteCollapsed((c) => !c)}
             onOpenSettings={() => setModal('settings')}
             onOpenAbout={() => setModal('about')}
-            onOpenOrchestrator={() => setOrchestrationMode(true)}
-            orchestratorActive={orchestrationMode}
+            tasks={tasks}
+            orchMode={orchMode}
+            openTaskId={openTaskId}
+            onOpenTasksView={() => { setOrchMode('tasks'); setOpenTaskId(null); }}
+            onOpenTask={(id) => { setOrchMode('task'); setOpenTaskId(id); }}
+            onAddTask={() => addTask()}
+            onDeleteTask={deleteTask}
           />
-          {orchestrationMode ? (
-            <OrchestrationView
-              taskNodes={taskNodes}
-              setTaskNodes={setTaskNodes}
-              taskEdges={taskEdges}
-              setTaskEdges={setTaskEdges}
-              componentNodes={nodes}
-              onSelectTask={setSelectedTaskId}
-            />
-          ) : (
+          {orchMode === 'component' && (
             <>
               <div className="atlas-canvas" onDrop={onCanvasDrop} onDragOver={onCanvasDragOver}>
                 <ReactFlow
@@ -278,6 +298,24 @@ export default function AtlasModeler() {
                 <PropertiesPanel node={selectedNode} onChange={updateNode} errors={selectedNode ? problems[selectedNode.id] : null} />
               )}
             </>
+          )}
+          {orchMode === 'tasks' && (
+            <TaskFlowView
+              tasks={tasks}
+              setTasks={setTasks}
+              taskFlowEdges={taskFlowEdges}
+              setTaskFlowEdges={setTaskFlowEdges}
+              onOpenTask={(id) => { setOrchMode('task'); setOpenTaskId(id); }}
+              onAddTask={() => addTask()}
+            />
+          )}
+          {orchMode === 'task' && (
+            <TaskDetailView
+              task={tasks.find((t) => t.id === openTaskId)}
+              componentNodes={nodes}
+              onUpdateTaskGraph={updateTaskGraph}
+              onCreateComponent={addNode}
+            />
           )}
         </div>
 

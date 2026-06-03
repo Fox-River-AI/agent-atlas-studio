@@ -36,8 +36,13 @@ export default function ObjectPalette({
   onToggleCollapse,
   onOpenSettings,
   onOpenAbout,
-  onOpenOrchestrator,
-  orchestratorActive,
+  tasks,
+  orchMode,
+  openTaskId,
+  onOpenTasksView,
+  onOpenTask,
+  onAddTask,
+  onDeleteTask,
 }) {
   const [openGroups, setOpenGroups] = useState(() =>
     Object.fromEntries(OBJECT_TYPES.map((t) => [t.type, true]))
@@ -87,17 +92,43 @@ export default function ObjectPalette({
       {/* ── object type groups ── */}
       <div className="atlas-groups">
         {OBJECT_TYPES.map(({ type, label, singular }) => {
-          // The orchestrator is a single fixed fixture — one row that opens the
-          // orchestration view. No count, no right-click-create, no instances.
+          // Orchestration is an expandable group listing the high-level tasks.
+          // Its header opens the task-flow (outer DAG) view; each task opens its
+          // own inner canvas. "+ Add task" creates a task. (Reads like the other
+          // groups so it's discoverable — not a mysterious clickable noun.)
           if (singular) {
+            const open = openGroups[type];
+            const inOrch = orchMode === 'tasks' || orchMode === 'task';
             return (
-              <div
-                key={type}
-                className={`atlas-item ${type} atlas-singular ${orchestratorActive ? 'active' : ''}`}
-                onClick={onOpenOrchestrator}
-                title="Open the orchestration (control-flow) view"
-              >
-                {label}
+              <div key={type} className="atlas-group-section">
+                <div
+                  className={`atlas-group-header atlas-orch-header ${inOrch ? 'active' : ''}`}
+                  onClick={() => { setOpenGroups((g) => ({ ...g, [type]: true })); onOpenTasksView(); }}
+                  title="Open the orchestration (task flow) view"
+                >
+                  <span
+                    className="atlas-caret"
+                    onClick={(e) => { e.stopPropagation(); toggleGroup(type); }}
+                  >{open ? '▾' : '▸'}</span>
+                  <span className="atlas-group-label">Orchestration</span>
+                  <span className="atlas-group-count">{tasks.length}</span>
+                </div>
+                {open && (
+                  <div className="atlas-group-items">
+                    {tasks.length === 0 && <div className="atlas-empty">— no tasks —</div>}
+                    {tasks.map((t) => (
+                      <div
+                        key={t.id}
+                        className={`atlas-item orchestrator ${openTaskId === t.id ? 'active' : ''}`}
+                        onClick={() => onOpenTask(t.id)}
+                        title={`Open task: ${t.label}`}
+                      >
+                        {t.label}
+                      </div>
+                    ))}
+                    <button className="atlas-add-task" onClick={onAddTask}>+ Add task</button>
+                  </div>
+                )}
               </div>
             );
           }

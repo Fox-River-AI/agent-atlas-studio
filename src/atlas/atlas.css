@@ -226,7 +226,7 @@
 }
 .atlas-item.atlas-singular.active { background: var(--bg-elevated); color: var(--accent); }
 
-.atlas-orch { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.atlas-orch { flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; }
 .atlas-orch-bar {
   display: flex; align-items: baseline; gap: 1rem; padding: 0.6rem 1rem;
   border-bottom: 1px solid var(--border); background: var(--bg-panel); flex-wrap: wrap;
@@ -234,11 +234,12 @@
 .atlas-orch-title { color: var(--accent); font-weight: 600; font-size: 0.95rem; }
 .atlas-orch-hint { color: var(--text-muted); font-size: 0.85rem; }
 .atlas-orch-warn { color: var(--bad); font-size: 0.85rem; }
-.atlas-orch-canvas { flex: 1; min-height: 0; background: var(--bg); }
+.atlas-orch-canvas { flex: 1; min-height: 0; background: var(--bg); position: relative; }
+.atlas-orch-canvas .react-flow { width: 100%; height: 100%; }
 
 /* Task nodes (orchestration canvas) — fixed px, zoom-scaled like component nodes */
 .atlas-task {
-  border-radius: 8px; padding: 8px 14px; min-width: 130px;
+  border-radius: 8px; padding: 8px 14px; width: 150px;
   border: 1px solid var(--accent); background: var(--bg-elevated); color: var(--text);
 }
 .atlas-task.unset { border-style: dashed; opacity: 0.85; }
@@ -248,3 +249,42 @@
   font-size: 11px; background: var(--bg-input); color: var(--text);
   border: 1px solid var(--border); border-radius: 4px; padding: 2px 4px; max-width: 160px;
 }
+
+/* Orchestration palette group */
+.atlas-group-header.atlas-orch-header.active { color: var(--accent); }
+.atlas-group-header.atlas-orch-header .atlas-group-label { color: var(--accent); }
+.atlas-add-task {
+  display: block; width: calc(100% - 1.5rem); margin: 0.3rem 0.75rem 0.2rem 1.9rem;
+  background: var(--bg-input); color: var(--agent); border: 1px dashed var(--border);
+  border-radius: 5px; padding: 0.3rem; font-size: 0.85rem; cursor: pointer; text-align: left;
+}
+.atlas-add-task:hover { border-color: var(--accent); color: var(--accent); }
+
+/* Orchestration empty state */
+.atlas-orch-empty {
+  flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 0.75rem; text-align: center; padding: 2rem; color: var(--text-muted); background: var(--bg);
+}
+.atlas-orch-empty p { margin: 0; font-size: 1.05rem; color: var(--text); }
+.atlas-orch-empty-sub { max-width: 32rem; font-size: 0.9rem !important; color: var(--text-muted) !important; line-height: 1.5; }
+.atlas-orch-empty .primary {
+  background: var(--accent); color: var(--accent-fg); border: none; border-radius: 6px;
+  padding: 0.5rem 1.1rem; cursor: pointer; font-weight: 600; font-size: 0.95rem;
+}
+
+/* High-level task nodes (outer DAG). Explicit width so React Flow v12 reliably
+   measures them (dynamic-content nodes without a set width can get stuck
+   visibility:hidden — xyflow #3270). */
+.atlas-hltask {
+  border-radius: 10px; padding: 12px 16px; width: 180px;
+  border: 2px solid var(--accent); background: var(--bg-elevated); color: var(--text); cursor: pointer;
+}
+.atlas-hltask.selected { box-shadow: 0 0 0 2px var(--accent); }
+.atlas-hltask-label { font-weight: 600; font-size: 14px; color: var(--accent); }
+.atlas-hltask-meta { font-size: 11px; color: var(--text-muted); margin-top: 3px; }
+
+/* Context menu grouping (task detail: reference or create components) */
+.atlas-ctx-group { padding: 0.25rem 0; border-bottom: 1px solid var(--border-soft); }
+.atlas-ctx-group:last-child { border-bottom: none; }
+.atlas-ctx-grouplabel { font-size: 0.72rem; color: var(--text-muted); padding: 0.2rem 0.9rem; letter-spacing: 0.5px; }
+.atlas-ctxmenu .atlas-ctx-new { color: var(--agent); font-style: italic; }
