@@ -16,6 +16,7 @@ import JSZip from 'jszip';
 
 import { nodeTypes } from './nodes';
 import PropertiesPanel from './PropertiesPanel';
+import ObjectPalette from './ObjectPalette';
 import { DEFAULT_MODEL } from './schema';
 import { buildRegistry, validateModel, crossChecks } from './model';
 import './atlas.css';
@@ -65,6 +66,11 @@ export default function AtlasModeler() {
   const [selectedId, setSelectedId] = useState(null);
   const [exportMsg, setExportMsg] = useState('');
   const [panelOpen, setPanelOpen] = useState(true);
+  const [paletteCollapsed, setPaletteCollapsed] = useState(false);
+  // Subject Areas = saved views (projections of the model). null = whole model.
+  // Persistence of named SAs is a follow-up; the selector + "All" work now.
+  const [subjectAreas] = useState([]);
+  const [currentSA, setCurrentSA] = useState(null);
 
   // Live validation: recompute per-node schema problems whenever the model changes.
   const problems = useMemo(() => validateModel(nodes, edges), [nodes, edges]);
@@ -89,16 +95,50 @@ export default function AtlasModeler() {
     if (id) setPanelOpen(true);
   }, []);
 
-  const addNode = (type) => {
-    const key = nextKey();
-    const base = type === 'agent'
+  const blankData = (type) =>
+    type === 'agent'
       ? { id: '', owner: '', version: '1.0.0', responsibility: '', model: { ...DEFAULT_MODEL }, refusalConditions: [], refusalEmits: 'refused', telemetry: [{ name: '', attributes: [] }] }
       : { id: '', owner: '', version: '1.0.0', description: '', effect: 'read', authScope: '' };
+
+  // Create a new object of `type` at an optional drop position; select it so the
+  // properties panel opens ready to edit.
+  const addNode = (type, position) => {
+    const key = nextKey();
+    const id = `n-${type}-${key}`;
     setNodes((nds) => [
       ...nds,
-      { id: `n-${type}-${key}`, type, position: { x: 200 + Math.round(seq * 12) % 200, y: 80 + (seq * 40) % 240 }, data: base },
+      {
+        id,
+        type,
+        position: position || { x: 200 + (Math.round(seq * 12) % 200), y: 80 + ((seq * 40) % 240) },
+        data: blankData(type),
+      },
     ]);
+    setSelectedId(id);
+    setPanelOpen(true);
   };
+
+  // Drag an existing instance from the palette → re-focus it on the canvas.
+  const onDragInstanceStart = (e, node) => {
+    e.dataTransfer.setData('application/atlas-instance', node.id);
+    e.dataTransfer.effectAllowed = 'move';
+  };
+  const onCanvasDrop = useCallback(
+    (e) => {
+      e.preventDefault();
+      const instanceId = e.dataTransfer.getData('application/atlas-instance');
+      if (instanceId) {
+        // Instance already exists in the model; select + focus it.
+        setSelectedId(instanceId);
+        setPanelOpen(true);
+      }
+    },
+    []
+  );
+  const onCanvasDragOver = useCallback((e) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+  }, []);
 
   const updateNode = (nodeId, patch) => {
     setNodes((nds) => nds.map((n) => (n.id === nodeId ? { ...n, data: { ...n.data, ...patch } } : n)));
@@ -149,7 +189,19 @@ export default function AtlasModeler() {
         {exportMsg && <div className="atlas-export-msg">{exportMsg}</div>}
 
         <div className="atlas-body">
-          <div className="atlas-canvas">
+          <ObjectPalette
+            nodes={nodes}
+            subjectAreas={subjectAreas}
+            currentSA={currentSA}
+            onSelectSA={setCurrentSA}
+            onNewSA={() => setExportMsg('Subject Areas (saved views) are coming soon.')}
+            onCreate={addNode}
+            onSelectInstance={(id) => { setSelectedId(id); setPanelOpen(true); }}
+            onDragInstanceStart={onDragInstanceStart}
+            collapsed={paletteCollapsed}
+            onToggleCollapse={() => setPaletteCollapsed((c) => !c)}
+          />
+          <div className="atlas-canvas" onDrop={onCanvasDrop} onDragOver={onCanvasDragOver}>
             <ReactFlow
               nodes={decoratedNodes}
               edges={edges}
