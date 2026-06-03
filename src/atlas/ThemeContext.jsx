@@ -73,11 +73,11 @@ export const THEMES = {
   },
 };
 
-export const FONT_SIZES = {
-  small: { label: 'Small', base: 13 },
-  medium: { label: 'Medium', base: 15 },
-  large: { label: 'Large', base: 17 },
-};
+// Continuous UI font scale. 1.0 = 100% (16px root). The slider moves this and
+// it scales ALL chrome proportionally because every UI size is in rem (relative
+// to the html root font-size we set here). Canvas node text is NOT affected —
+// that is governed by React Flow's zoom.
+export const FONT_SCALE = { min: 0.85, max: 1.6, step: 0.05, default: 1.0, rootPx: 16 };
 
 const ThemeContext = createContext(null);
 
@@ -87,19 +87,26 @@ export function useTheme() {
 
 export function ThemeProvider({ children }) {
   const [themeId, setThemeId] = useState(() => localStorage.getItem('atlas-theme') || 'dark');
-  const [fontSize, setFontSize] = useState(() => localStorage.getItem('atlas-font') || 'medium');
+  const [fontScale, setFontScale] = useState(() => {
+    const v = parseFloat(localStorage.getItem('atlas-font-scale'));
+    return Number.isFinite(v) ? v : FONT_SCALE.default;
+  });
 
   useEffect(() => {
     const theme = THEMES[themeId] || THEMES.dark;
     const root = document.documentElement;
     for (const [k, v] of Object.entries(theme.vars)) root.style.setProperty(k, v);
-    root.style.setProperty('--font-base', `${(FONT_SIZES[fontSize] || FONT_SIZES.medium).base}px`);
     localStorage.setItem('atlas-theme', themeId);
-    localStorage.setItem('atlas-font', fontSize);
-  }, [themeId, fontSize]);
+  }, [themeId]);
+
+  useEffect(() => {
+    // One value scales every rem-based UI size proportionally.
+    document.documentElement.style.fontSize = `${FONT_SCALE.rootPx * fontScale}px`;
+    localStorage.setItem('atlas-font-scale', String(fontScale));
+  }, [fontScale]);
 
   return (
-    <ThemeContext.Provider value={{ themeId, setThemeId, fontSize, setFontSize }}>
+    <ThemeContext.Provider value={{ themeId, setThemeId, fontScale, setFontScale }}>
       {children}
     </ThemeContext.Provider>
   );

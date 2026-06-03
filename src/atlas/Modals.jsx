@@ -1,7 +1,7 @@
 // Settings + About modals (Noesis-style). Settings controls theme + font size,
 // both of which flow through ThemeContext → CSS variables → the whole app.
 import React from 'react';
-import { useTheme, THEMES, FONT_SIZES } from './ThemeContext';
+import { useTheme, THEMES, FONT_SCALE } from './ThemeContext';
 
 function Backdrop({ onClose, children }) {
   return (
@@ -14,7 +14,8 @@ function Backdrop({ onClose, children }) {
 }
 
 export function SettingsModal({ onClose }) {
-  const { themeId, setThemeId, fontSize, setFontSize } = useTheme();
+  const { themeId, setThemeId, fontScale, setFontScale } = useTheme();
+  const pct = Math.round(fontScale * 100);
   return (
     <Backdrop onClose={onClose}>
       <h2>Settings</h2>
@@ -35,18 +36,20 @@ export function SettingsModal({ onClose }) {
       </div>
 
       <div className="atlas-modal-row">
-        <label>Font size (applies to panels and canvas)</label>
-        <div className="atlas-seg">
-          {Object.entries(FONT_SIZES).map(([id, f]) => (
-            <button
-              key={id}
-              className={fontSize === id ? 'active' : ''}
-              onClick={() => setFontSize(id)}
-            >
-              {f.label}
-            </button>
-          ))}
+        <label>Interface font size — scales all panels, menus, and text proportionally (canvas nodes use zoom)</label>
+        <div className="atlas-slider-row">
+          <input
+            type="range"
+            min={FONT_SCALE.min}
+            max={FONT_SCALE.max}
+            step={FONT_SCALE.step}
+            value={fontScale}
+            onChange={(e) => setFontScale(parseFloat(e.target.value))}
+          />
+          <span className="atlas-slider-pct">{pct}%</span>
+          <button className="atlas-slider-reset" onClick={() => setFontScale(FONT_SCALE.default)}>Reset</button>
         </div>
+        <div className="atlas-slider-sample">The quick brown fox — sample text at {pct}%.</div>
       </div>
 
       <div className="atlas-modal-actions">
