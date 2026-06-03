@@ -90,10 +90,13 @@ export const SEED_EDGES = [
   E('orchestrate-agent', 'traffic-switch'), E('orchestrate-agent', 'run-state'),
 ];
 
-// Start with tasks expanded, agents collapsed, so the tree shows the workflow
-// shape and the canvas isn't overwhelming.
+// Tasks + most agents expanded so the tree shows the full workflow depth
+// (tasks → agents → tools/jobs/systems/router) and needs scrolling — the
+// presentable "this is the whole platform model" view.
 export const SEED_EXPANDED = {
   'assess-source': true, 'convert-ddl': true, 'migrate-data': true, 'validate-cutover': true,
+  'inventory-agent': true, 'extract-agent': true, 'convert-agent': true,
+  'load-agent': true, 'reconcile-agent': true, 'orchestrate-agent': true,
 };
 
 // A demonstrable Subject Area: just the schema-conversion slice.
