@@ -36,6 +36,8 @@ export default function ObjectPalette({
   onToggleCollapse,
   onOpenSettings,
   onOpenAbout,
+  onOpenOrchestrator,
+  orchestratorActive,
 }) {
   const [openGroups, setOpenGroups] = useState(() =>
     Object.fromEntries(OBJECT_TYPES.map((t) => [t.type, true]))
@@ -85,6 +87,20 @@ export default function ObjectPalette({
       {/* ── object type groups ── */}
       <div className="atlas-groups">
         {OBJECT_TYPES.map(({ type, label, singular }) => {
+          // The orchestrator is a single fixed fixture — one row that opens the
+          // orchestration view. No count, no right-click-create, no instances.
+          if (singular) {
+            return (
+              <div
+                key={type}
+                className={`atlas-item ${type} atlas-singular ${orchestratorActive ? 'active' : ''}`}
+                onClick={onOpenOrchestrator}
+                title="Open the orchestration (control-flow) view"
+              >
+                {label}
+              </div>
+            );
+          }
           const items = byType[type];
           const open = openGroups[type];
           return (

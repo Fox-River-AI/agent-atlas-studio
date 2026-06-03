@@ -218,3 +218,33 @@
 }
 .atlas-modal p { font-size: 0.95rem; line-height: 1.5; color: var(--text-muted); }
 .atlas-modal a { color: var(--agent); }
+
+/* ── Orchestrator: singular palette entry + dedicated control-flow view ── */
+.atlas-item.atlas-singular {
+  padding-left: 0.75rem; font-weight: 600; color: var(--text);
+  border-left-color: var(--accent);
+}
+.atlas-item.atlas-singular.active { background: var(--bg-elevated); color: var(--accent); }
+
+.atlas-orch { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.atlas-orch-bar {
+  display: flex; align-items: baseline; gap: 1rem; padding: 0.6rem 1rem;
+  border-bottom: 1px solid var(--border); background: var(--bg-panel); flex-wrap: wrap;
+}
+.atlas-orch-title { color: var(--accent); font-weight: 600; font-size: 0.95rem; }
+.atlas-orch-hint { color: var(--text-muted); font-size: 0.85rem; }
+.atlas-orch-warn { color: var(--bad); font-size: 0.85rem; }
+.atlas-orch-canvas { flex: 1; min-height: 0; background: var(--bg); }
+
+/* Task nodes (orchestration canvas) — fixed px, zoom-scaled like component nodes */
+.atlas-task {
+  border-radius: 8px; padding: 8px 14px; min-width: 130px;
+  border: 1px solid var(--accent); background: var(--bg-elevated); color: var(--text);
+}
+.atlas-task.unset { border-style: dashed; opacity: 0.85; }
+.atlas-task.selected { box-shadow: 0 0 0 2px var(--accent); }
+.atlas-task-id { font-weight: 600; font-size: 13px; margin-bottom: 4px; }
+.atlas-task-select {
+  font-size: 11px; background: var(--bg-input); color: var(--text);
+  border: 1px solid var(--border); border-radius: 4px; padding: 2px 4px; max-width: 160px;
+}

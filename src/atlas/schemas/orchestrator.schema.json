@@ -1,0 +1,42 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/Fox-River-AI/agent-atlas/main/registry/schema/orchestrator.schema.json",
+  "title": "agent-atlas Orchestrator manifest",
+  "description": "The single control plane: a deterministic graph of tasks. Each task invokes one component (agent or tool); transitions between tasks express order and conditional branching. There is exactly one orchestrator per model.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["apiVersion", "kind", "id", "version", "steps"],
+  "properties": {
+    "apiVersion": { "const": "agent-atlas/v1" },
+    "kind": { "const": "Orchestrator" },
+    "id": { "const": "orchestrator" },
+    "version": { "type": "string", "pattern": "^\\d+\\.\\d+\\.\\d+$" },
+    "state_store": { "type": "string", "description": "id of a System (kind=state-store) where run/step state is externalized." },
+    "steps": {
+      "type": "array",
+      "description": "The tasks, in declaration order. Each invokes one component; transitions express the DAG.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "invokes"],
+        "properties": {
+          "id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]*$" },
+          "invokes": { "type": "string", "description": "id of the agent or tool this task runs." },
+          "transitions": {
+            "type": "array",
+            "description": "Outgoing edges. An unconditioned transition is 'then'; a 'when' makes it conditional.",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["to"],
+              "properties": {
+                "to": { "type": "string", "description": "id of the next task." },
+                "when": { "type": "string", "description": "condition for this branch; omit for an unconditional 'then'." }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

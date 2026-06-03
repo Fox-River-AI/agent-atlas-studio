@@ -17,6 +17,7 @@ import JSZip from 'jszip';
 import { nodeTypes } from './nodes';
 import PropertiesPanel from './PropertiesPanel';
 import ObjectPalette from './ObjectPalette';
+import OrchestrationView from './OrchestrationView';
 import { SettingsModal, AboutModal } from './Modals';
 import { DEFAULT_MODEL } from './schema';
 import { buildRegistry, validateModel, crossChecks } from './model';
@@ -73,6 +74,27 @@ export default function AtlasModeler() {
   const [subjectAreas] = useState([]);
   const [currentSA, setCurrentSA] = useState(null);
   const [modal, setModal] = useState(null); // 'settings' | 'about' | null
+  // Orchestration mode: when true, the canvas shows the control-flow view (tasks
+  // only), not the component graph. Tasks + their transitions live here.
+  const [orchestrationMode, setOrchestrationMode] = useState(false);
+  const [taskNodes, setTaskNodes] = useState([]);
+  const [taskEdges, setTaskEdges] = useState([]);
+  const [selectedTaskId, setSelectedTaskId] = useState(null);
+  let taskSeq = taskNodes.length;
+  const addTask = () => {
+    taskSeq += 1;
+    const id = `task-${taskSeq}`;
+    setTaskNodes((ts) => [
+      ...ts,
+      { id, type: 'task', position: { x: 120 + (ts.length * 60) % 360, y: 100 + (ts.length * 70) % 280 }, data: { id, invokes: '' } },
+    ]);
+  };
+  const deleteSelectedTask = () => {
+    if (!selectedTaskId) return;
+    setTaskNodes((ts) => ts.filter((t) => t.id !== selectedTaskId));
+    setTaskEdges((es) => es.filter((e) => e.source !== selectedTaskId && e.target !== selectedTaskId));
+    setSelectedTaskId(null);
+  };
 
   // Live validation: recompute per-node schema problems whenever the model changes.
   const problems = useMemo(() => validateModel(nodes, edges), [nodes, edges]);
@@ -179,21 +201,29 @@ export default function AtlasModeler() {
     <div className="atlas-page">
         <div className="atlas-toolbar">
           <h1>Agent Atlas — Modeler</h1>
-          <div className="atlas-actions">
-            <button onClick={() => addNode('agent')}>+ Agent</button>
-            <button onClick={() => addNode('tool')}>+ Tool</button>
-            <span className={`atlas-status ${allValid ? 'ok' : 'bad'}`}>
-              {allValid ? '✓ registry valid' : `✗ ${Object.keys(problems).length + crossIssues.length} issue(s)`}
-            </span>
-            <button className="primary" onClick={exportRegistry} disabled={!allValid}>Export registry</button>
-            <button
-              className="atlas-panel-toggle"
-              onClick={() => setPanelOpen((o) => !o)}
-              title={panelOpen ? 'Collapse properties panel' : 'Show properties panel'}
-            >
-              {panelOpen ? 'Panel ⟩' : '⟨ Panel'}
-            </button>
-          </div>
+          {orchestrationMode ? (
+            <div className="atlas-actions">
+              <button onClick={() => setOrchestrationMode(false)}>⟵ Component view</button>
+              <button onClick={addTask}>+ Task</button>
+              <button onClick={deleteSelectedTask} disabled={!selectedTaskId}>Delete task</button>
+            </div>
+          ) : (
+            <div className="atlas-actions">
+              <button onClick={() => addNode('agent')}>+ Agent</button>
+              <button onClick={() => addNode('tool')}>+ Tool</button>
+              <span className={`atlas-status ${allValid ? 'ok' : 'bad'}`}>
+                {allValid ? '✓ registry valid' : `✗ ${Object.keys(problems).length + crossIssues.length} issue(s)`}
+              </span>
+              <button className="primary" onClick={exportRegistry} disabled={!allValid}>Export registry</button>
+              <button
+                className="atlas-panel-toggle"
+                onClick={() => setPanelOpen((o) => !o)}
+                title={panelOpen ? 'Collapse properties panel' : 'Show properties panel'}
+              >
+                {panelOpen ? 'Panel ⟩' : '⟨ Panel'}
+              </button>
+            </div>
+          )}
         </div>
 
         {crossIssues.length > 0 && (
@@ -209,30 +239,45 @@ export default function AtlasModeler() {
             onSelectSA={setCurrentSA}
             onNewSA={() => setExportMsg('Subject Areas (saved views) are coming soon.')}
             onCreate={addNode}
-            onSelectInstance={(id) => { setSelectedId(id); setPanelOpen(true); }}
+            onSelectInstance={(id) => { setOrchestrationMode(false); setSelectedId(id); setPanelOpen(true); }}
             onDragInstanceStart={onDragInstanceStart}
             collapsed={paletteCollapsed}
             onToggleCollapse={() => setPaletteCollapsed((c) => !c)}
             onOpenSettings={() => setModal('settings')}
             onOpenAbout={() => setModal('about')}
+            onOpenOrchestrator={() => setOrchestrationMode(true)}
+            orchestratorActive={orchestrationMode}
           />
-          <div className="atlas-canvas" onDrop={onCanvasDrop} onDragOver={onCanvasDragOver}>
-            <ReactFlow
-              nodes={decoratedNodes}
-              edges={edges}
-              onNodesChange={onNodesChange}
-              onEdgesChange={onEdgesChange}
-              onConnect={onConnect}
-              onSelectionChange={onSelectionChange}
-              nodeTypes={nodeTypes}
-              fitView
-            >
-              <Background />
-              <Controls />
-            </ReactFlow>
-          </div>
-          {panelOpen && (
-            <PropertiesPanel node={selectedNode} onChange={updateNode} errors={selectedNode ? problems[selectedNode.id] : null} />
+          {orchestrationMode ? (
+            <OrchestrationView
+              taskNodes={taskNodes}
+              setTaskNodes={setTaskNodes}
+              taskEdges={taskEdges}
+              setTaskEdges={setTaskEdges}
+              componentNodes={nodes}
+              onSelectTask={setSelectedTaskId}
+            />
+          ) : (
+            <>
+              <div className="atlas-canvas" onDrop={onCanvasDrop} onDragOver={onCanvasDragOver}>
+                <ReactFlow
+                  nodes={decoratedNodes}
+                  edges={edges}
+                  onNodesChange={onNodesChange}
+                  onEdgesChange={onEdgesChange}
+                  onConnect={onConnect}
+                  onSelectionChange={onSelectionChange}
+                  nodeTypes={nodeTypes}
+                  fitView
+                >
+                  <Background />
+                  <Controls />
+                </ReactFlow>
+              </div>
+              {panelOpen && (
+                <PropertiesPanel node={selectedNode} onChange={updateNode} errors={selectedNode ? problems[selectedNode.id] : null} />
+              )}
+            </>
           )}
         </div>
 
