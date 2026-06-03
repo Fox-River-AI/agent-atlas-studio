@@ -8,6 +8,7 @@ import UnifiedGraph from './UnifiedGraph';
 import PropertiesPanel from './PropertiesPanel';
 import { VALIDATORS, formatErrors, DEFAULT_MODEL } from './schema';
 import { manifestFor } from './model';
+import { blankData, CREATABLE_KINDS } from './blankData';
 import './atlas.css';
 
 // Seed: one task containing one agent; the agent contains two tools + a job.
@@ -34,6 +35,34 @@ export default function UnifiedModeler() {
   const [selectedId, setSelectedId] = useState(null);
 
   const toggleExpand = useCallback((id) => setExpanded((e) => ({ ...e, [id]: !e[id] })), []);
+
+  let seq = Object.keys(objects).length;
+  // Create a new object (top-level until connected). Select it so its
+  // properties open ready to edit.
+  const createObject = (kind) => {
+    seq += 1;
+    const id = `${kind}-${seq}`;
+    setObjects((o) => ({ ...o, [id]: { id, kind, parent: null, data: blankData(kind) } }));
+    setSelectedId(id);
+  };
+
+  // Draw a relationship: source → target. This also establishes nesting —
+  // the target becomes the source's child (Erwin "create then connect"). Expand
+  // the source so the new child is visible.
+  const connect = useCallback((params) => {
+    const { source, target } = params;
+    if (!source || !target || source === target) return;
+    setObjects((o) => {
+      const child = o[target];
+      if (!child) return o;
+      return { ...o, [target]: { ...child, parent: source } };
+    });
+    setEdges((es) => {
+      if (es.some((e) => e.source === source && e.target === target)) return es;
+      return [...es, { id: `e-${source}-${target}`, source, target }];
+    });
+    setExpanded((e) => ({ ...e, [source]: true }));
+  }, []);
 
   // Validity per object (drives the red/ok dot), reusing the same validators.
   const validityById = useMemo(() => {
@@ -69,7 +98,10 @@ export default function UnifiedModeler() {
       <div className="atlas-toolbar">
         <h1>Agent Atlas — Unified Graph (Step 1)</h1>
         <div className="atlas-actions">
-          <span className="atlas-orch-hint">Double-click a task/agent to expand or collapse. Click any node to edit it.</span>
+          {CREATABLE_KINDS.map((k) => (
+            <button key={k.kind} onClick={() => createObject(k.kind)}>+ {k.label}</button>
+          ))}
+          <span className="atlas-orch-hint">Drag node → node to connect (sets nesting). Double-click to expand/collapse. Click to edit.</span>
         </div>
       </div>
       <div className="atlas-body">
@@ -80,7 +112,7 @@ export default function UnifiedModeler() {
           onToggleExpand={toggleExpand}
           selectedId={selectedId}
           onSelect={setSelectedId}
-          onConnect={() => {}}
+          onConnect={connect}
           validityById={validityById}
         />
         <PropertiesPanel node={selectedNode} onChange={updateSelected} errors={selectedErrors} />
