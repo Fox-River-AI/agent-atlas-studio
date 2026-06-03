@@ -1,16 +1,61 @@
-# React + Vite
+# agent-atlas-studio
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+**Visual modeler for agentic AI systems — design your fleet, validate it live, export a registry.**
 
-Currently, two official plugins are available:
+`agent-atlas-studio` is the visual front end for
+[`agent-atlas`](https://github.com/Fox-River-AI/agent-atlas): lay out your agents
+and tools on a canvas, draw the tool-allowlist edges between them, and export a
+version-controlled registry that `agent-atlas`'s own validator accepts. It is the
+*forward-engineering* half of an Erwin-style loop for agent fleets — design
+visually, generate the spec.
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+## What it does today
 
-## React Compiler
+- **Model** — drag Agent and Tool nodes onto a canvas; connect an agent to the
+  tools it is allowed to call.
+- **Validate live** — every node is checked in-browser against the `agent-atlas`
+  JSON schema (single responsibility, pinned model, refusal as a first-class
+  output, typed I/O, tool effect class). The status flips red the moment the
+  model stops being valid.
+- **Export** — produce the registry (`*.agent.yaml`, `*.tool.yaml`, `io/*.json`).
+  The agent's `tools` allowlist and each tool's `reused_by` are computed from the
+  same edges, so they are consistent by construction — which is what surfaces
+  redundant, near-duplicate agents.
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+## How it relates to agent-atlas
 
-## Expanding the ESLint configuration
+`agent-atlas` is the open engine: the manifest **schema** (the single source of
+truth) and the deterministic **validators**. This repo vendors it as a git
+submodule and imports the schema directly — there is exactly one copy, so the UI
+can never drift from the spec.
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+```
+agent-atlas (engine: schema + validators)  ──submodule──▶  agent-atlas-studio (this: the UI)
+```
+
+## Run it
+
+```bash
+git clone --recurse-submodules https://github.com/Fox-River-AI/agent-atlas-studio.git
+cd agent-atlas-studio
+npm install
+npm run dev          # web build, http://localhost:5173
+```
+
+(If you cloned without `--recurse-submodules`: `git submodule update --init`.)
+
+The same React app is built to run as a Tauri desktop application (local-first,
+filesystem access) — that shell is on the roadmap below.
+
+## Roadmap
+
+- **Forward** — model → registry + scaffolding. *(working)*
+- **Build handoff** — generate the bundle a coding agent (e.g. Claude Code) needs
+  to build the modeled system: registry + `CLAUDE.md` + enforcement hooks. *(next)*
+- **Reverse + conformance** — recover the running agent/tool graph from
+  OpenTelemetry traces and diff it against the declared registry, to show where
+  reality has drifted from the design. *(planned)*
+
+## License
+
+Apache-2.0 © Fox River AI
