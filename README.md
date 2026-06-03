@@ -69,6 +69,8 @@ The studio is the visual front of an Erwin‑style loop — **design ⇄ build �
 
 The model is the spec, `CLAUDE.md` is the contract, the hooks are the enforcement, and conformance proves the model is *true* — not just drawn.
 
+See **[docs/STATUS.md](docs/STATUS.md)** for the detailed current state, the per-object build mapping, and what's next.
+
 ## License
 
 [Apache-2.0](LICENSE) © Fox River AI
