@@ -77,8 +77,10 @@ function layoutVisible(objects, expanded, rootIds) {
     if (!o) return yBand;
     const kids = childrenOf(id, objects);
     const isExpanded = expanded[id];
-    const x = depth * COL;
-    const y = yBand * ROW;
+    // Honor an explicit stored position (set on create / future drag) so nodes
+    // stay where the user put them; fall back to auto-layout by depth/band.
+    const x = o.position ? o.position.x : depth * COL;
+    const y = o.position ? o.position.y : yBand * ROW;
     visible.push({ id, depth, x, y });
     let band = yBand;
     if (isExpanded && kids.length) {

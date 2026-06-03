@@ -9,6 +9,7 @@ import PropertiesPanel from './PropertiesPanel';
 import { VALIDATORS, formatErrors, DEFAULT_MODEL } from './schema';
 import { manifestFor } from './model';
 import { blankData, CREATABLE_KINDS } from './blankData';
+import { canConnect, connectionReason } from './relationships';
 import './atlas.css';
 
 // Seed: one task containing one agent; the agent contains two tools + a job.
@@ -43,27 +44,35 @@ export default function UnifiedModeler() {
   const createObject = (kind) => {
     seq += 1;
     const id = `${kind}-${seq}`;
-    setObjects((o) => ({ ...o, [id]: { id, kind, parent: null, data: blankData(kind) } }));
+    // Place near the currently-selected node so it appears where you're looking;
+    // fall back to a default spot. (Stored positions are honored by the layout.)
+    const anchor = selectedId && objects[selectedId]?.position;
+    const position = anchor ? { x: anchor.x + 60, y: anchor.y + 130 } : { x: 120, y: 120 };
+    setObjects((o) => ({ ...o, [id]: { id, kind, parent: null, position, data: blankData(kind) } }));
     setSelectedId(id);
-    setFocusReq({ id, n: (focusReq?.n || 0) + 1 }); // unique each time so the view re-centers even on the same id
+    setFocusReq({ id, n: (focusReq?.n || 0) + 1 });
   };
 
   // Draw a relationship: source → target. This also establishes nesting —
   // the target becomes the source's child (Erwin "create then connect"). Expand
   // the source so the new child is visible.
+  const [connectMsg, setConnectMsg] = useState('');
   const connect = useCallback((params) => {
     const { source, target } = params;
     if (!source || !target || source === target) return;
     setObjects((o) => {
-      const child = o[target];
-      if (!child) return o;
+      const src = o[source], child = o[target];
+      if (!src || !child) return o;
+      // Enforce sensible relationships (e.g. no Task → System).
+      if (!canConnect(src.kind, child.kind)) {
+        setConnectMsg(connectionReason(src.kind, child.kind));
+        return o;
+      }
+      setConnectMsg('');
+      setEdges((es) => (es.some((e) => e.source === source && e.target === target) ? es : [...es, { id: `e-${source}-${target}`, source, target }]));
+      setExpanded((e) => ({ ...e, [source]: true }));
       return { ...o, [target]: { ...child, parent: source } };
     });
-    setEdges((es) => {
-      if (es.some((e) => e.source === source && e.target === target)) return es;
-      return [...es, { id: `e-${source}-${target}`, source, target }];
-    });
-    setExpanded((e) => ({ ...e, [source]: true }));
   }, []);
 
   // Validity per object (drives the red/ok dot), reusing the same validators.
@@ -104,6 +113,7 @@ export default function UnifiedModeler() {
             <button key={k.kind} onClick={() => createObject(k.kind)}>+ {k.label}</button>
           ))}
           <span className="atlas-orch-hint">Drag node → node to connect (sets nesting). Double-click to expand/collapse. Click to edit.</span>
+          {connectMsg && <span className="atlas-orch-warn">{connectMsg}</span>}
         </div>
       </div>
       <div className="atlas-body">
