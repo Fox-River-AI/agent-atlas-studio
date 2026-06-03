@@ -1,0 +1,15 @@
+/* Minimal reset — give the modeler full viewport height so React Flow's canvas
+   doesn't collapse to zero (the failure mode that blanked the old build). */
+* { box-sizing: border-box; }
+
+html, body, #root {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: system-ui, 'Segoe UI', Roboto, sans-serif;
+  background: #121212;
+  color: #f5f5f5;
+}

@@ -1,0 +1,3 @@
+[submodule "vendor/agent-atlas"]
+	path = vendor/agent-atlas
+	url = https://github.com/Fox-River-AI/agent-atlas.git
