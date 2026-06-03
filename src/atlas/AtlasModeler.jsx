@@ -64,6 +64,7 @@ export default function AtlasModeler() {
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
   const [selectedId, setSelectedId] = useState(null);
   const [exportMsg, setExportMsg] = useState('');
+  const [panelOpen, setPanelOpen] = useState(true);
 
   // Live validation: recompute per-node schema problems whenever the model changes.
   const problems = useMemo(() => validateModel(nodes, edges), [nodes, edges]);
@@ -82,7 +83,10 @@ export default function AtlasModeler() {
   );
 
   const onSelectionChange = useCallback(({ nodes: sel }) => {
-    setSelectedId(sel && sel.length ? sel[0].id : null);
+    const id = sel && sel.length ? sel[0].id : null;
+    setSelectedId(id);
+    // Selecting a node auto-opens the panel so editing is always one click away.
+    if (id) setPanelOpen(true);
   }, []);
 
   const addNode = (type) => {
@@ -129,6 +133,13 @@ export default function AtlasModeler() {
               {allValid ? '✓ registry valid' : `✗ ${Object.keys(problems).length + crossIssues.length} issue(s)`}
             </span>
             <button className="primary" onClick={exportRegistry} disabled={!allValid}>Export registry</button>
+            <button
+              className="atlas-panel-toggle"
+              onClick={() => setPanelOpen((o) => !o)}
+              title={panelOpen ? 'Collapse properties panel' : 'Show properties panel'}
+            >
+              {panelOpen ? 'Panel ⟩' : '⟨ Panel'}
+            </button>
           </div>
         </div>
 
@@ -153,7 +164,9 @@ export default function AtlasModeler() {
               <Controls />
             </ReactFlow>
           </div>
-          <PropertiesPanel node={selectedNode} onChange={updateNode} errors={selectedNode ? problems[selectedNode.id] : null} />
+          {panelOpen && (
+            <PropertiesPanel node={selectedNode} onChange={updateNode} errors={selectedNode ? problems[selectedNode.id] : null} />
+          )}
         </div>
     </div>
   );

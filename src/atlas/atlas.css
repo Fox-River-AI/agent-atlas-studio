@@ -29,6 +29,9 @@
 .atlas-actions button.primary { background: #ff9900; color: #121212; border-color: #ff9900; font-weight: 600; }
 .atlas-actions button.primary:disabled { background: #4a4a4a; color: #999; border-color: #4a4a4a; cursor: not-allowed; }
 
+.atlas-actions button.atlas-panel-toggle { color: #bbb; border-color: #3a3a3a; }
+.atlas-actions button.atlas-panel-toggle:hover { color: #f5f5f5; border-color: #ff9900; }
+
 .atlas-status { font-size: 13px; font-weight: 600; padding: 4px 8px; border-radius: 4px; }
 .atlas-status.ok { color: #6ee7b7; }
 .atlas-status.bad { color: #f0997b; }
