@@ -69,7 +69,7 @@ export default function UnifiedModeler() {
       <div className="atlas-toolbar">
         <h1>Agent Atlas — Unified Graph (Step 1)</h1>
         <div className="atlas-actions">
-          <span className="atlas-orch-hint">Double-click a task/agent to expand or collapse. Select any node to edit it.</span>
+          <span className="atlas-orch-hint">Double-click a task/agent to expand or collapse. Click any node to edit it.</span>
         </div>
       </div>
       <div className="atlas-body">

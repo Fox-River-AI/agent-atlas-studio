@@ -53,6 +53,10 @@
 .react-flow__edge.selected .react-flow__edge-path,
 .react-flow__edge:hover .react-flow__edge-path { stroke: var(--accent); stroke-width: 2px; }
 .react-flow__arrowhead { fill: var(--text-muted); }
+/* Containment edges (parent contains child): SAME weight + brightness as
+   relationship edges — distinguished only by being dashed ("contains" vs the
+   solid "relates-to"). */
+.react-flow__edge.atlas-edge-contain .react-flow__edge-path { stroke-dasharray: 6 4; stroke: var(--text-muted); stroke-width: 1.5px; }
 
 /* ── Left object palette ── */
 .atlas-palette {

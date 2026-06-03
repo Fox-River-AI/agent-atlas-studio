@@ -138,25 +138,37 @@ export default function UnifiedGraph({
     );
   }, [positioned, objects, expanded, selectedId, validityById, onToggleExpand, setRfNodes]);
 
-  // Only show edges whose both endpoints are currently visible.
+  // Edges shown = implicit containment edges (parent → visible child) PLUS the
+  // explicit relationship edges, both filtered to currently-visible endpoints.
+  // Containment edges make the hierarchy (task → agent → tool) visible even
+  // before any explicit relationships are drawn.
   useEffect(() => {
-    setRfEdges(
-      edges
-        .filter((e) => visibleIds.has(e.source) && visibleIds.has(e.target))
-        .map((e) => ({ ...e, markerEnd: { type: MarkerType.ArrowClosed } }))
-    );
-  }, [edges, visibleIds, setRfEdges]);
+    const containment = Object.values(objects)
+      .filter((o) => o.parent && visibleIds.has(o.parent) && visibleIds.has(o.id))
+      .map((o) => ({
+        id: `contain-${o.parent}-${o.id}`,
+        source: o.parent,
+        target: o.id,
+        className: 'atlas-edge-contain',
+        markerEnd: { type: MarkerType.ArrowClosed },
+      }));
+    const explicit = edges
+      .filter((e) => visibleIds.has(e.source) && visibleIds.has(e.target))
+      .map((e) => ({ ...e, markerEnd: { type: MarkerType.ArrowClosed } }));
+    // De-dupe: if an explicit edge already connects parent→child, prefer it.
+    const explicitPairs = new Set(explicit.map((e) => `${e.source}->${e.target}`));
+    const merged = [...containment.filter((c) => !explicitPairs.has(`${c.source}->${c.target}`)), ...explicit];
+    setRfEdges(merged);
+  }, [objects, edges, visibleIds, setRfEdges]);
 
   const handleConnect = useCallback((params) => onConnect?.(params), [onConnect]);
 
-  const onSelectionChange = useCallback(
-    ({ nodes: sel }) => onSelect?.(sel && sel.length ? sel[0].id : null),
-    [onSelect]
-  );
-  // onNodeClick is the reliable single-click selection path for custom nodes
-  // (onSelectionChange alone can miss clicks that inner node elements absorb).
+  // Select on node click ONLY. We deliberately do NOT use onSelectionChange to
+  // drive selection: because we rebuild the node array each render (without
+  // carrying React Flow's internal `selected` flag), onSelectionChange fires
+  // with an empty set right after a click and would stomp the selection back to
+  // null. onNodeClick is the single source of selection truth here.
   const onNodeClick = useCallback((_e, node) => onSelect?.(node.id), [onSelect]);
-  const onPaneClick = useCallback(() => onSelect?.(null), [onSelect]);
 
   return (
     <div className="atlas-canvas">
@@ -166,9 +178,7 @@ export default function UnifiedGraph({
         onNodesChange={onNodesChange}
         onEdgesChange={(c) => { onEdgesChange(c); }}
         onConnect={handleConnect}
-        onSelectionChange={onSelectionChange}
         onNodeClick={onNodeClick}
-        onPaneClick={onPaneClick}
         nodeTypes={unifiedNodeTypes}
         colorMode={colorMode}
         proOptions={{ hideAttribution: true }}
