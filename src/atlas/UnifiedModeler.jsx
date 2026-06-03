@@ -151,14 +151,17 @@ export default function UnifiedModeler() {
       <div className="atlas-toolbar">
         <h1>Agent Atlas</h1>
         <div className="atlas-actions">
-          <button
-            className={`atlas-status as-button ${allValid ? 'ok' : 'bad'}`}
-            onClick={() => setShowIssues((s) => !s)}
-            disabled={allValid}
-            title={allValid ? '' : 'Show what needs fixing'}
-          >
-            {allValid ? '✓ registry valid' : `✗ ${issueCount} issue(s) ▾`}
-          </button>
+          {allValid ? (
+            <span className="atlas-status ok">✓ registry valid</span>
+          ) : (
+            <button
+              className="atlas-status as-button bad"
+              onClick={() => setShowIssues((s) => !s)}
+              title="Show what needs fixing"
+            >
+              ✗ {issueCount} issue(s) {showIssues ? '▴' : '▾'}
+            </button>
+          )}
           <button className="primary" onClick={exportRegistry} disabled={!allValid}>Export registry</button>
           <button className="atlas-panel-toggle" onClick={() => setPanelOpen((o) => !o)}
             title={panelOpen ? 'Collapse properties panel' : 'Show properties panel'}>
