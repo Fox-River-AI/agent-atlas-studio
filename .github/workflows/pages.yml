@@ -27,7 +27,10 @@ jobs:
         with:
           node-version: 20
           cache: npm
-      - run: npm ci
+      # npm install (not ci) so platform-specific optional deps (e.g. @emnapi/*,
+      # rollup native binaries) resolve on the Linux runner even when the
+      # lockfile was generated on macOS.
+      - run: npm install --no-audit --no-fund
       - name: Build (project-pages base path)
         run: npm run build
         env:
