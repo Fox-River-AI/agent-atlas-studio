@@ -7,7 +7,7 @@ import React, { useMemo } from 'react';
 import { CREATABLE_KINDS } from './blankData';
 
 const KIND_DOT = {
-  task: 'var(--accent)', agent: 'var(--agent)', tool: 'var(--tool)',
+  orchestrator: '#ff5c8a', task: 'var(--accent)', agent: 'var(--agent)', tool: 'var(--tool)',
   job: '#e0b35c', system: '#7aa2ff', router: '#e879c7',
 };
 
@@ -53,8 +53,12 @@ export default function ModelTree({
   subjectAreas, currentSA, onSelectSA, onNewSA, onEditSA,
   onCreate, collapsed, onToggleCollapse, onOpenSettings, onOpenAbout,
 }) {
+  // Roots = objects whose parent is not in the current (possibly SA-filtered)
+  // set. In "All" that's the orchestrator; in a Subject Area it's the member
+  // tasks (their parent orchestrator is filtered out). Without this, an SA view
+  // would have no renderable root and show empty.
   const roots = useMemo(
-    () => Object.values(objects).filter((o) => !o.parent)
+    () => Object.values(objects).filter((o) => !o.parent || !objects[o.parent])
       .sort((a, b) => (a.data?.label || a.id).localeCompare(b.data?.label || b.id)),
     [objects]
   );

@@ -2,41 +2,21 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://raw.githubusercontent.com/Fox-River-AI/agent-atlas/main/registry/schema/orchestrator.schema.json",
   "title": "agent-atlas Orchestrator manifest",
-  "description": "The single control plane: a deterministic graph of tasks. Each task invokes one component (agent or tool); transitions between tasks express order and conditional branching. There is exactly one orchestrator per model.",
+  "description": "The single control plane. It owns the deterministic control flow — deciding which task/agent runs, in what order, and on what condition — and externalizes run state. There is one orchestrator per model; the tasks are its children.",
   "type": "object",
   "additionalProperties": false,
-  "required": ["apiVersion", "kind", "id", "version", "steps"],
+  "required": ["apiVersion", "kind", "id", "version", "owner", "control_flow"],
   "properties": {
     "apiVersion": { "const": "agent-atlas/v1" },
     "kind": { "const": "Orchestrator" },
-    "id": { "const": "orchestrator" },
+    "id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]*$" },
     "version": { "type": "string", "pattern": "^\\d+\\.\\d+\\.\\d+$" },
-    "state_store": { "type": "string", "description": "id of a System (kind=state-store) where run/step state is externalized." },
-    "steps": {
-      "type": "array",
-      "description": "The tasks, in declaration order. Each invokes one component; transitions express the DAG.",
-      "items": {
-        "type": "object",
-        "additionalProperties": false,
-        "required": ["id", "invokes"],
-        "properties": {
-          "id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]*$" },
-          "invokes": { "type": "string", "description": "id of the agent or tool this task runs." },
-          "transitions": {
-            "type": "array",
-            "description": "Outgoing edges. An unconditioned transition is 'then'; a 'when' makes it conditional.",
-            "items": {
-              "type": "object",
-              "additionalProperties": false,
-              "required": ["to"],
-              "properties": {
-                "to": { "type": "string", "description": "id of the next task." },
-                "when": { "type": "string", "description": "condition for this branch; omit for an unconditional 'then'." }
-              }
-            }
-          }
-        }
-      }
-    }
+    "owner": { "type": "string", "minLength": 1 },
+    "description": { "type": "string" },
+    "control_flow": {
+      "enum": ["state-machine", "dag", "sequential"],
+      "description": "How the orchestrator expresses control flow: a state machine, a DAG, or a simple sequence."
+    },
+    "state_store": { "type": "string", "description": "id of a System (kind=state-store) where run/step state is externalized." }
   }
 }

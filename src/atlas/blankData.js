@@ -5,6 +5,8 @@ import { DEFAULT_MODEL } from './schema';
 export function blankData(kind, presetId) {
   const common = { id: presetId || '', owner: '', version: '1.0.0' };
   switch (kind) {
+    case 'orchestrator':
+      return { ...common, description: '', controlFlow: 'dag', stateStore: '' };
     case 'task':
       return { id: presetId || '', label: '', description: '' };
     case 'agent':

@@ -28,11 +28,11 @@ import {
 import '@xyflow/react/dist/style.css';
 import { useTheme } from './ThemeContext';
 
-const KIND_LABEL = { task: 'TASK', agent: 'AGENT', tool: 'MCP TOOL', job: 'JOB', router: 'ROUTER', system: 'SYSTEM' };
+const KIND_LABEL = { orchestrator: 'ORCHESTRATOR', task: 'TASK', agent: 'AGENT', tool: 'MCP TOOL', job: 'JOB', router: 'ROUTER', system: 'SYSTEM' };
 
 // Which kinds can contain children (can expand). Leaves (tool/job/system/router)
 // terminate — they never show an expand affordance.
-const CONTAINER_KINDS = new Set(['task', 'agent']);
+const CONTAINER_KINDS = new Set(['orchestrator', 'task', 'agent']);
 
 function childrenOf(parentId, objects) {
   return Object.values(objects).filter((o) => o.parent === parentId);
@@ -114,8 +114,10 @@ function UnifiedGraphInner({
   const colorMode = themeId === 'light' ? 'light' : 'dark';
   const rf = useReactFlow();
 
+  // Roots = objects whose parent isn't in the current set (the orchestrator in
+  // "All"; the member tasks in a Subject Area, whose parent is filtered out).
   const rootIds = useMemo(
-    () => Object.values(objects).filter((o) => !o.parent).map((o) => o.id),
+    () => Object.values(objects).filter((o) => !o.parent || !objects[o.parent]).map((o) => o.id),
     [objects]
   );
 

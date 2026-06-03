@@ -7,6 +7,7 @@
 // - Tools, Jobs, Systems, Routers are LEAVES — no outgoing relationships.
 // - Tasks may sequence other Tasks (task-level order).
 export const ALLOWED_TARGETS = {
+  orchestrator: new Set(['task']),
   task: new Set(['agent', 'task']),
   agent: new Set(['tool', 'job', 'router', 'system']),
   tool: new Set([]),

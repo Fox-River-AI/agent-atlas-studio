@@ -374,6 +374,7 @@
   width: 190px; border-radius: 8px; padding: 8px 12px; border: 1px solid;
   background: var(--bg-elevated); color: var(--text);
 }
+.atlas-unode.orchestrator { border-color: #ff5c8a; background: #3a0f22; width: 220px; }
 .atlas-unode.task { border-color: var(--accent); width: 210px; }
 .atlas-unode.agent { border-color: var(--agent); background: var(--agent-bg); }
 .atlas-unode.tool { border-color: var(--tool); background: var(--tool-bg); }

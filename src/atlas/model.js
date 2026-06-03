@@ -144,9 +144,24 @@ export function routerManifest(node) {
   };
 }
 
+export function orchestratorManifest(node) {
+  const d = node.data;
+  return {
+    apiVersion: 'agent-atlas/v1',
+    kind: 'Orchestrator',
+    id: d.id,
+    version: d.version || '1.0.0',
+    owner: d.owner || '',
+    ...(d.description ? { description: d.description } : {}),
+    control_flow: d.controlFlow || 'dag',
+    ...(d.stateStore ? { state_store: d.stateStore } : {}),
+  };
+}
+
 // Build the manifest object for any node, dispatched by type.
 export function manifestFor(node, nodes, edges) {
   switch (node.type) {
+    case 'orchestrator': return orchestratorManifest(node);
     case 'agent': return agentManifest(node, nodes, edges);
     case 'tool': return toolManifest(node, nodes, edges);
     case 'job': return jobManifest(node);
@@ -174,6 +189,7 @@ const REGISTRY_DIRS = {
   job: { dir: 'jobs', suffix: '.job.yaml' },
   system: { dir: 'systems', suffix: '.system.yaml' },
   router: { dir: 'routers', suffix: '.router.yaml' },
+  orchestrator: { dir: '.', suffix: '.orchestrator.yaml' },
 };
 
 // Produce the full registry as a map of relative path -> file contents (string).

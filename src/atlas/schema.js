@@ -18,6 +18,7 @@ import toolSchema from '../../vendor/agent-atlas/registry/schema/tool.schema.jso
 import jobSchema from './schemas/job.schema.json';
 import systemSchema from './schemas/system.schema.json';
 import routerSchema from './schemas/router.schema.json';
+import orchestratorSchema from './schemas/orchestrator.schema.json';
 
 const ajv = new Ajv({ allErrors: true, strict: false });
 
@@ -26,9 +27,11 @@ export const validateTool = ajv.compile(toolSchema);
 export const validateJob = ajv.compile(jobSchema);
 export const validateSystem = ajv.compile(systemSchema);
 export const validateRouter = ajv.compile(routerSchema);
+export const validateOrchestrator = ajv.compile(orchestratorSchema);
 
 // Per-node-type validator lookup, so the model layer stays generic.
 export const VALIDATORS = {
+  orchestrator: validateOrchestrator,
   agent: validateAgent,
   tool: validateTool,
   job: validateJob,
@@ -36,7 +39,7 @@ export const VALIDATORS = {
   router: validateRouter,
 };
 
-export { agentSchema, toolSchema, jobSchema, systemSchema, routerSchema };
+export { agentSchema, toolSchema, jobSchema, systemSchema, routerSchema, orchestratorSchema };
 
 // The model+pinned version a freshly-dropped agent starts with. Mirrors the
 // example manifest in the submodule so a new model validates as soon as the

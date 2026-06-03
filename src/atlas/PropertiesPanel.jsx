@@ -28,7 +28,7 @@ export default function PropertiesPanel({ node, onChange, errors }) {
     // autoCapitalize/Correct/spellCheck off so ids like "db-connect" aren't
     // mangled to "Db-connect" by the webview (WebKit inherits these to inputs).
     <div className="atlas-panel" autoCapitalize="off" autoCorrect="off" spellCheck={false}>
-      <h3>{{ task: 'Task', agent: 'Agent', tool: 'MCP Tool', job: 'Job', system: 'External System', router: 'Router' }[node.type] || node.type}</h3>
+      <h3>{{ orchestrator: 'Orchestrator', task: 'Task', agent: 'Agent', tool: 'MCP Tool', job: 'Job', system: 'External System', router: 'Router' }[node.type] || node.type}</h3>
 
       {node.type === 'task' ? (
         <>
@@ -230,6 +230,24 @@ export default function PropertiesPanel({ node, onChange, errors }) {
 
           <Field label="fallback model" hint="used when no rule matches">
             <input value={d.fallback || ''} onChange={(e) => set({ fallback: e.target.value })} placeholder="claude-opus-4-8" />
+          </Field>
+        </>
+      )}
+
+      {node.type === 'orchestrator' && (
+        <>
+          <Field label="description">
+            <textarea value={d.description || ''} onChange={(e) => set({ description: e.target.value })} rows={2} placeholder="The control plane: decides which task/agent runs, in what order." />
+          </Field>
+          <Field label="control flow" hint="how the orchestrator expresses control flow">
+            <select value={d.controlFlow || 'dag'} onChange={(e) => set({ controlFlow: e.target.value })}>
+              <option value="dag">dag</option>
+              <option value="state-machine">state-machine</option>
+              <option value="sequential">sequential</option>
+            </select>
+          </Field>
+          <Field label="state store" hint="id of a System (kind=state-store) for run/step state">
+            <input value={d.stateStore || ''} onChange={(e) => set({ stateStore: e.target.value })} placeholder="run-state" />
           </Field>
         </>
       )}
