@@ -1,0 +1,184 @@
+// The unified collapsible graph (Erwin-style). ONE underlying model of objects
+// (tasks, agents, tools, jobs, routers, systems) with parent/child nesting and
+// edges. Double-click a node to expand/collapse its children; leaves don't
+// expand. Selecting any node shows its properties in the right pane. The same
+// model renders as the main graph or a filtered Subject-Area graph.
+//
+// Step 1 scope (verifiable): nesting + expand/collapse + properties-always-show,
+// with automatic child layout. Create-then-connect relationships, SA switching,
+// and stubs come in later steps.
+import React, { useMemo, useCallback, useState, useEffect } from 'react';
+import {
+  ReactFlow,
+  Background,
+  Controls,
+  useNodesState,
+  useEdgesState,
+  applyEdgeChanges,
+  MarkerType,
+  Handle,
+  Position,
+} from '@xyflow/react';
+import { useTheme } from './ThemeContext';
+
+const KIND_LABEL = { task: 'TASK', agent: 'AGENT', tool: 'MCP TOOL', job: 'JOB', router: 'ROUTER', system: 'SYSTEM' };
+
+// Which kinds can contain children (can expand). Leaves (tool/job/system/router)
+// terminate — they never show an expand affordance.
+const CONTAINER_KINDS = new Set(['task', 'agent']);
+
+function childrenOf(parentId, objects) {
+  return Object.values(objects).filter((o) => o.parent === parentId);
+}
+
+// A single object rendered as a node. Shows a ▸/▾ toggle only if it has children.
+function ObjectNode({ data }) {
+  const hasChildren = data.childCount > 0;
+  const canExpand = CONTAINER_KINDS.has(data.kind);
+  return (
+    <div
+      className={`atlas-unode ${data.kind} ${data.selected ? 'selected' : ''} ${data.valid === false ? 'invalid' : ''}`}
+      onDoubleClick={(e) => { if (canExpand && hasChildren) { e.stopPropagation(); data.onToggle(data.objId); } }}
+    >
+      <Handle type="target" position={Position.Left} />
+      <div className="atlas-unode-head">
+        {canExpand && (
+          <span
+            className="atlas-unode-caret"
+            onClick={(e) => { e.stopPropagation(); data.onToggle(data.objId); }}
+            title={data.expanded ? 'Collapse' : 'Expand'}
+          >
+            {hasChildren ? (data.expanded ? '▾' : '▸') : '·'}
+          </span>
+        )}
+        <span className="atlas-unode-kind">{KIND_LABEL[data.kind] || data.kind}</span>
+      </div>
+      <div className="atlas-unode-id">{data.label || '(unnamed)'}</div>
+      {hasChildren && !data.expanded && (
+        <div className="atlas-unode-meta">{data.childCount} child{data.childCount === 1 ? '' : 'ren'} · double-click to expand</div>
+      )}
+      <Handle type="source" position={Position.Right} />
+    </div>
+  );
+}
+const unifiedNodeTypes = { object: ObjectNode };
+
+// Lay out the VISIBLE objects: roots across the top; a node's visible children
+// are placed below/right of it. Collapsed nodes contribute no visible children.
+function layoutVisible(objects, expanded, rootIds) {
+  const visible = [];
+  let xCursor = 0;
+  const COL = 240, ROW = 120;
+
+  function place(id, depth, yBand) {
+    const o = objects[id];
+    if (!o) return yBand;
+    const kids = childrenOf(id, objects);
+    const isExpanded = expanded[id];
+    const x = depth * COL;
+    const y = yBand * ROW;
+    visible.push({ id, depth, x, y });
+    let band = yBand;
+    if (isExpanded && kids.length) {
+      kids.forEach((k, i) => { band = place(k.id, depth + 1, band + (i === 0 ? 0 : 1)); });
+    }
+    return band + 1;
+  }
+
+  let band = 0;
+  for (const rid of rootIds) { band = place(rid, 0, band); xCursor++; }
+  return visible;
+}
+
+export default function UnifiedGraph({
+  objects,         // { id: {id, kind, parent, data} }
+  edges,           // [{ id, source, target, label? }]
+  expanded,        // { id: bool }
+  onToggleExpand,
+  selectedId,
+  onSelect,
+  onConnect,
+  validityById,    // { id: bool }
+}) {
+  const { themeId } = useTheme();
+  const colorMode = themeId === 'light' ? 'light' : 'dark';
+
+  const rootIds = useMemo(
+    () => Object.values(objects).filter((o) => !o.parent).map((o) => o.id),
+    [objects]
+  );
+
+  // Compute visible nodes (respecting collapse) and lay them out.
+  const positioned = useMemo(() => layoutVisible(objects, expanded, rootIds), [objects, expanded, rootIds]);
+  const visibleIds = useMemo(() => new Set(positioned.map((p) => p.id)), [positioned]);
+
+  const [rfNodes, setRfNodes, onNodesChange] = useNodesState([]);
+  const [rfEdges, setRfEdges, onEdgesChange] = useEdgesState([]);
+
+  useEffect(() => {
+    setRfNodes(
+      positioned.map((p) => {
+        const o = objects[p.id];
+        return {
+          id: o.id,
+          type: 'object',
+          position: { x: p.x, y: p.y },
+          data: {
+            objId: o.id,
+            kind: o.kind,
+            label: o.data?.id || o.id,
+            childCount: childrenOf(o.id, objects).length,
+            expanded: !!expanded[o.id],
+            selected: o.id === selectedId,
+            valid: validityById ? validityById[o.id] !== false : true,
+            onToggle: onToggleExpand,
+          },
+        };
+      })
+    );
+  }, [positioned, objects, expanded, selectedId, validityById, onToggleExpand, setRfNodes]);
+
+  // Only show edges whose both endpoints are currently visible.
+  useEffect(() => {
+    setRfEdges(
+      edges
+        .filter((e) => visibleIds.has(e.source) && visibleIds.has(e.target))
+        .map((e) => ({ ...e, markerEnd: { type: MarkerType.ArrowClosed } }))
+    );
+  }, [edges, visibleIds, setRfEdges]);
+
+  const handleConnect = useCallback((params) => onConnect?.(params), [onConnect]);
+
+  const onSelectionChange = useCallback(
+    ({ nodes: sel }) => onSelect?.(sel && sel.length ? sel[0].id : null),
+    [onSelect]
+  );
+  // onNodeClick is the reliable single-click selection path for custom nodes
+  // (onSelectionChange alone can miss clicks that inner node elements absorb).
+  const onNodeClick = useCallback((_e, node) => onSelect?.(node.id), [onSelect]);
+  const onPaneClick = useCallback(() => onSelect?.(null), [onSelect]);
+
+  return (
+    <div className="atlas-canvas">
+      <ReactFlow
+        nodes={rfNodes}
+        edges={rfEdges}
+        onNodesChange={onNodesChange}
+        onEdgesChange={(c) => { onEdgesChange(c); }}
+        onConnect={handleConnect}
+        onSelectionChange={onSelectionChange}
+        onNodeClick={onNodeClick}
+        onPaneClick={onPaneClick}
+        nodeTypes={unifiedNodeTypes}
+        colorMode={colorMode}
+        proOptions={{ hideAttribution: true }}
+        fitView
+        fitViewOptions={{ maxZoom: 1, padding: 0.3 }}
+        minZoom={0.2}
+      >
+        <Background />
+        <Controls />
+      </ReactFlow>
+    </div>
+  );
+}

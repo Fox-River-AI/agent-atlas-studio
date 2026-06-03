@@ -26,19 +26,33 @@ export default function PropertiesPanel({ node, onChange, errors }) {
 
   return (
     <div className="atlas-panel">
-      <h3>{{ agent: 'Agent', tool: 'MCP Tool', job: 'Job', system: 'External System', router: 'Router' }[node.type] || node.type}</h3>
+      <h3>{{ task: 'Task', agent: 'Agent', tool: 'MCP Tool', job: 'Job', system: 'External System', router: 'Router' }[node.type] || node.type}</h3>
 
-      <Field label="id" hint="lowercase, hyphens; matches the manifest filename">
-        <input value={d.id || ''} onChange={(e) => set({ id: e.target.value })} placeholder="intake-classifier" />
-      </Field>
-
-      <Field label="owner">
-        <input value={d.owner || ''} onChange={(e) => set({ owner: e.target.value })} placeholder="platform-team" />
-      </Field>
-
-      <Field label="version">
-        <input value={d.version || '1.0.0'} onChange={(e) => set({ version: e.target.value })} placeholder="1.0.0" />
-      </Field>
+      {node.type === 'task' ? (
+        <>
+          <Field label="id" hint="lowercase, hyphens">
+            <input value={d.id || ''} onChange={(e) => set({ id: e.target.value })} placeholder="ingest-mssql-data" />
+          </Field>
+          <Field label="label" hint="human-readable name shown on the canvas">
+            <input value={d.label || ''} onChange={(e) => set({ label: e.target.value })} placeholder="Ingest MS SQL Data" />
+          </Field>
+          <Field label="description">
+            <textarea value={d.description || ''} onChange={(e) => set({ description: e.target.value })} rows={3} placeholder="What this high-level task accomplishes." />
+          </Field>
+        </>
+      ) : (
+        <>
+          <Field label="id" hint="lowercase, hyphens; matches the manifest filename">
+            <input value={d.id || ''} onChange={(e) => set({ id: e.target.value })} placeholder="intake-classifier" />
+          </Field>
+          <Field label="owner">
+            <input value={d.owner || ''} onChange={(e) => set({ owner: e.target.value })} placeholder="platform-team" />
+          </Field>
+          <Field label="version">
+            <input value={d.version || '1.0.0'} onChange={(e) => set({ version: e.target.value })} placeholder="1.0.0" />
+          </Field>
+        </>
+      )}
 
       {node.type === 'agent' && (
         <>
