@@ -288,12 +288,23 @@
    measures them (dynamic-content nodes without a set width can get stuck
    visibility:hidden — xyflow #3270). */
 .atlas-hltask {
-  border-radius: 10px; padding: 12px 16px; width: 180px;
+  border-radius: 10px; padding: 12px 16px; width: 220px;
   border: 2px solid var(--accent); background: var(--bg-elevated); color: var(--text); cursor: pointer;
 }
 .atlas-hltask.selected { box-shadow: 0 0 0 2px var(--accent); }
 .atlas-hltask-label { font-weight: 600; font-size: 14px; color: var(--accent); }
-.atlas-hltask-meta { font-size: 11px; color: var(--text-muted); margin-top: 3px; }
+.atlas-hltask-meta { font-size: 11px; color: var(--text-muted); margin-top: 4px; }
+.atlas-hltask-chips { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
+.atlas-chip {
+  font-size: 10px; padding: 1px 7px; border-radius: 10px; max-width: 100%;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  border: 1px solid; background: var(--bg-input); color: var(--text);
+}
+.atlas-chip.agent { border-color: var(--agent); }
+.atlas-chip.tool { border-color: var(--tool); }
+.atlas-chip.job { border-color: #e0b35c; }
+.atlas-chip.system { border-color: #7aa2ff; }
+.atlas-chip.router { border-color: #e879c7; }
 
 /* Empty-state prompt overlaid on an empty task-detail canvas */
 .atlas-task-emptyhint {

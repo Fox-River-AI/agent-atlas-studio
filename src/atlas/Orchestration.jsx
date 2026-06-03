@@ -24,7 +24,10 @@ import {
 } from '@xyflow/react';
 
 // ── Level 1: task-level DAG ───────────────────────────────────────────────
+// Each task box previews its component steps as chips (read-only) so you can see
+// what's inside without drilling in; double-click to open and edit.
 function HighLevelTaskNode({ data, selected }) {
+  const steps = data.steps || [];
   return (
     <div
       className={`atlas-hltask ${selected ? 'selected' : ''}`}
@@ -33,7 +36,20 @@ function HighLevelTaskNode({ data, selected }) {
     >
       <Handle type="target" position={Position.Left} />
       <div className="atlas-hltask-label">{data.label}</div>
-      <div className="atlas-hltask-meta">{data.count} step(s) · double-click to open</div>
+      {steps.length === 0 ? (
+        <div className="atlas-hltask-meta">no steps yet · double-click to open</div>
+      ) : (
+        <>
+          <div className="atlas-hltask-chips">
+            {steps.map((s, i) => (
+              <span key={i} className={`atlas-chip ${s.componentType || 'agent'}`} title={`${s.componentType}: ${s.componentId}`}>
+                {s.componentId || '(unset)'}
+              </span>
+            ))}
+          </div>
+          <div className="atlas-hltask-meta">{steps.length} step(s) · double-click to open</div>
+        </>
+      )}
       <Handle type="source" position={Position.Right} />
     </div>
   );
@@ -57,7 +73,12 @@ export function TaskFlowView({ tasks, setTasks, taskFlowEdges, setTaskFlowEdges,
         id: t.id,
         type: 'hltask',
         position: prevById[t.id]?.position || t.position,
-        data: { taskId: t.id, label: t.label, count: (t.nodes || []).length, onOpen: onOpenTask },
+        data: {
+          taskId: t.id,
+          label: t.label,
+          steps: (t.nodes || []).map((n) => ({ componentType: n.data?.componentType, componentId: n.data?.componentId })),
+          onOpen: onOpenTask,
+        },
       }));
     });
   }, [tasks, onOpenTask, setRfNodes]);
