@@ -53,7 +53,12 @@ properties.
   / routers / systems; leaves have no outgoing).
 - **Subject Areas** — saved views that filter the whole platform down to one
   slice (the orchestrator is context, hidden inside an SA). Switch back to "All"
-  for the whole model.
+  for the whole model. Each view keeps its **own** node layout and zoom/pan, so
+  switching between Subject Areas preserves how you arranged and framed each one.
+- **The model persists** — your objects, edges, Subject Areas, per-view layout,
+  and per-view zoom are auto-saved and restored on the next launch (a file on
+  disk in the desktop app; browser storage on the web). **Reset to demo** clears
+  it back to the built-in example.
 - **Live validation** — every object is checked against the open `agent-atlas`
   JSON schema as you edit; invalid objects are flagged in the tree, and a
   plain-language issue list names what's missing and jumps you to it.
