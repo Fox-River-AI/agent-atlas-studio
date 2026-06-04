@@ -32,6 +32,15 @@ export default function UnifiedModeler() {
   const [currentSA, setCurrentSA] = useState(null);
   const [saEditor, setSaEditor] = useState(null); // { id, name, taskIds } being edited
   const [exportMsg, setExportMsg] = useState('');
+  // Per-VIEW node layout (Erwin-style saved diagrams): layouts[viewId][objId] = {x,y}.
+  // viewId is 'all' or the SA id. The same object can sit differently per view.
+  // Positions live HERE, not on the object — so selection never re-lays-out.
+  const [layouts, setLayouts] = useState({});
+  const viewId = currentSA || 'all';
+  // Persist a node's dragged position into the current view's layout.
+  const setNodePosition = useCallback((objId, pos) => {
+    setLayouts((L) => ({ ...L, [viewId]: { ...(L[viewId] || {}), [objId]: pos } }));
+  }, [viewId]);
 
   const toggleExpand = useCallback((id) => setExpanded((e) => ({ ...e, [id]: !e[id] })), []);
 
@@ -81,11 +90,11 @@ export default function UnifiedModeler() {
   const createObject = (kind) => {
     seq += 1;
     const id = `${kind}-${seq}`;
-    // Place near the currently-selected node so it appears where you're looking;
-    // fall back to a default spot. (Stored positions are honored by the layout.)
-    const anchor = selectedId && objects[selectedId]?.position;
-    const position = anchor ? { x: anchor.x + 60, y: anchor.y + 130 } : { x: 120, y: 120 };
-    setObjects((o) => ({ ...o, [id]: { id, kind, parent: null, position, data: blankData(kind) } }));
+    setObjects((o) => ({ ...o, [id]: { id, kind, parent: null, data: blankData(kind) } }));
+    // Place near the currently-selected node, in the CURRENT view's layout.
+    const anchor = selectedId && layouts[viewId]?.[selectedId];
+    const position = anchor ? { x: anchor.x + 60, y: anchor.y + 130 } : { x: 140, y: 120 };
+    setNodePosition(id, position);
     setSelectedId(id);
     setFocusReq({ id, n: (focusReq?.n || 0) + 1 });
   };
@@ -258,6 +267,9 @@ export default function UnifiedModeler() {
           onConnect={connect}
           validityById={validityById}
           focusReq={focusReq}
+          viewId={viewId}
+          layout={layouts[viewId]}
+          onNodePosition={setNodePosition}
         />
         {panelOpen && <PropertiesPanel node={selectedNode} onChange={updateSelected} errors={selectedErrors} />}
       </div>

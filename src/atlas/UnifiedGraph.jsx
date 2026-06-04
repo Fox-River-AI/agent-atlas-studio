@@ -72,9 +72,11 @@ const unifiedNodeTypes = { object: ObjectNode };
 
 // Lay out the VISIBLE objects: roots across the top; a node's visible children
 // are placed below/right of it. Collapsed nodes contribute no visible children.
-function layoutVisible(objects, expanded, rootIds) {
+// Lay out the visible objects. A node's position comes from the per-view
+// `layout` map if present (the user's saved/dragged position for this view);
+// otherwise it's auto-placed by depth/band. layout = { objId: {x,y} }.
+function layoutVisible(objects, expanded, rootIds, layout = {}) {
   const visible = [];
-  let xCursor = 0;
   const COL = 240, ROW = 120;
 
   function place(id, depth, yBand) {
@@ -82,10 +84,9 @@ function layoutVisible(objects, expanded, rootIds) {
     if (!o) return yBand;
     const kids = childrenOf(id, objects);
     const isExpanded = expanded[id];
-    // Honor an explicit stored position (set on create / future drag) so nodes
-    // stay where the user put them; fall back to auto-layout by depth/band.
-    const x = o.position ? o.position.x : depth * COL;
-    const y = o.position ? o.position.y : yBand * ROW;
+    const saved = layout[id];
+    const x = saved ? saved.x : depth * COL;
+    const y = saved ? saved.y : yBand * ROW;
     visible.push({ id, depth, x, y });
     let band = yBand;
     if (isExpanded && kids.length) {
@@ -95,7 +96,7 @@ function layoutVisible(objects, expanded, rootIds) {
   }
 
   let band = 0;
-  for (const rid of rootIds) { band = place(rid, 0, band); xCursor++; }
+  for (const rid of rootIds) band = place(rid, 0, band);
   return visible;
 }
 
@@ -109,6 +110,9 @@ function UnifiedGraphInner({
   onConnect,
   validityById,    // { id: bool }
   focusReq,        // { id, n } — when this changes, center the view on that node
+  viewId,          // current view id ('all' or an SA id) — changing it reloads layout
+  layout,          // { objId: {x,y} } for the current view
+  onNodePosition,  // (objId, {x,y}) — persist a dragged position to the current view
 }) {
   const { themeId } = useTheme();
   const colorMode = themeId === 'light' ? 'light' : 'dark';
@@ -121,13 +125,19 @@ function UnifiedGraphInner({
     [objects]
   );
 
-  // Compute visible nodes (respecting collapse) and lay them out.
-  const positioned = useMemo(() => layoutVisible(objects, expanded, rootIds), [objects, expanded, rootIds]);
+  // Compute visible nodes (respecting collapse), positioned from the per-view
+  // layout. NOTE: deliberately NOT dependent on selectedId — selection must
+  // never re-lay-out (that was the reset-on-click bug).
+  const positioned = useMemo(
+    () => layoutVisible(objects, expanded, rootIds, layout || {}),
+    [objects, expanded, rootIds, layout]
+  );
   const visibleIds = useMemo(() => new Set(positioned.map((p) => p.id)), [positioned]);
 
   const [rfNodes, setRfNodes, onNodesChange] = useNodesState([]);
   const [rfEdges, setRfEdges, onEdgesChange] = useEdgesState([]);
 
+  // Build nodes when the structure/layout/view changes — NOT on selection.
   useEffect(() => {
     setRfNodes(
       positioned.map((p) => {
@@ -149,7 +159,16 @@ function UnifiedGraphInner({
         };
       })
     );
-  }, [positioned, objects, expanded, selectedId, validityById, onToggleExpand, setRfNodes]);
+  // NOT dependent on selectedId — rebuilding on select is what reset the layout.
+  }, [positioned, objects, expanded, validityById, onToggleExpand, setRfNodes]);
+
+  // Selection updates ONLY the `selected` flag on existing nodes, in place —
+  // no rebuild, no position change. This is the fix for layout-reset-on-click.
+  useEffect(() => {
+    setRfNodes((nds) => nds.map((n) =>
+      n.data.selected === (n.id === selectedId) ? n : { ...n, data: { ...n.data, selected: n.id === selectedId } }
+    ));
+  }, [selectedId, setRfNodes]);
 
   // Edges shown = implicit containment edges (parent → visible child) PLUS the
   // explicit relationship edges, both filtered to currently-visible endpoints.
@@ -188,6 +207,13 @@ function UnifiedGraphInner({
     return () => clearTimeout(t);
   }, [focusReq, positioned, rf]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Fit the view to its content when the VIEW changes (e.g. switching Subject
+  // Areas), so a new view is readable instead of clumped/tiny. (DIAG-10)
+  useEffect(() => {
+    const t = setTimeout(() => { try { rf.fitView({ maxZoom: 1, padding: 0.2, duration: 300 }); } catch { /* not ready */ } }, 80);
+    return () => clearTimeout(t);
+  }, [viewId, rf]);
+
   // Select on node click ONLY. We deliberately do NOT use onSelectionChange to
   // drive selection: because we rebuild the node array each render (without
   // carrying React Flow's internal `selected` flag), onSelectionChange fires
@@ -195,12 +221,24 @@ function UnifiedGraphInner({
   // null. onNodeClick is the single source of selection truth here.
   const onNodeClick = useCallback((_e, node) => onSelect?.(node.id), [onSelect]);
 
+  // Apply React Flow's node changes locally, and persist finished drags to the
+  // current view's layout so positions survive selection, re-render, and view
+  // switches. (dragging:false marks the end of a drag.)
+  const handleNodesChange = useCallback((changes) => {
+    onNodesChange(changes);
+    for (const c of changes) {
+      if (c.type === 'position' && c.position && c.dragging === false) {
+        onNodePosition?.(c.id, c.position);
+      }
+    }
+  }, [onNodesChange, onNodePosition]);
+
   return (
     <div className="atlas-canvas">
       <ReactFlow
         nodes={rfNodes}
         edges={rfEdges}
-        onNodesChange={onNodesChange}
+        onNodesChange={handleNodesChange}
         onEdgesChange={(c) => { onEdgesChange(c); }}
         onConnect={handleConnect}
         onNodeClick={onNodeClick}
