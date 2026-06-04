@@ -3,7 +3,7 @@
 // the selected object. Seeded with a nested example (task → agent → tools/job)
 // so expand/collapse + properties-at-every-level are verifiable now. Later
 // steps fold this into the main AtlasModeler and add create/connect, SAs, stubs.
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import JSZip from 'jszip';
 import UnifiedGraph from './UnifiedGraph';
 import PropertiesPanel from './PropertiesPanel';
@@ -16,8 +16,13 @@ import { canConnect, connectionReason } from './relationships';
 import { namedIssues } from './validationMessages';
 import './atlas.css';
 import { SEED_OBJECTS, SEED_EDGES, SEED_EXPANDED, SEED_SUBJECT_AREAS } from './seedModel';
+import { loadModel, saveModel, clearModel } from './persistence';
 
 export default function UnifiedModeler() {
+  // Render the demo seed first; if a saved model exists on disk it's loaded
+  // asynchronously on mount (see the hydrate effect) and swapped in. Persistence
+  // is a real file in Tauri (localStorage doesn't survive restart on the dev
+  // http origin) — so loading can't be synchronous.
   const [objects, setObjects] = useState(SEED_OBJECTS);
   const [edges, setEdges] = useState(SEED_EDGES);
   const [expanded, setExpanded] = useState(SEED_EXPANDED);
@@ -36,11 +41,69 @@ export default function UnifiedModeler() {
   // viewId is 'all' or the SA id. The same object can sit differently per view.
   // Positions live HERE, not on the object — so selection never re-lays-out.
   const [layouts, setLayouts] = useState({});
+  // Per-VIEW zoom/pan: viewports[viewId] = {x,y,zoom}. Each view remembers how
+  // the user last had it framed; restored on switch and across restarts.
+  const [viewports, setViewports] = useState({});
   const viewId = currentSA || 'all';
   // Persist a node's dragged position into the current view's layout.
   const setNodePosition = useCallback((objId, pos) => {
     setLayouts((L) => ({ ...L, [viewId]: { ...(L[viewId] || {}), [objId]: pos } }));
   }, [viewId]);
+  // Persist a view's zoom/pan. Keyed by the passed id (not the closure's viewId)
+  // so a move captured mid-switch lands on the right view.
+  const setViewport = useCallback((vId, vp) => {
+    setViewports((V) => ({ ...V, [vId]: vp }));
+  }, []);
+
+  // Hydrate from the saved model once on mount. Until this completes, the
+  // `hydrated` gate keeps auto-save from overwriting the saved file with the
+  // seed defaults. If nothing is saved, we stay on the seed and mark hydrated.
+  const hydrated = useRef(false);
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const saved = await loadModel();
+      if (!cancelled && saved) {
+        setObjects(saved.objects);
+        setEdges(saved.edges);
+        setExpanded(saved.expanded);
+        setSubjectAreas(saved.subjectAreas);
+        setLayouts(saved.layouts);
+        setViewports(saved.viewports);
+      }
+      if (!cancelled) hydrated.current = true;
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  // Auto-save the whole model whenever any part changes (debounced so a drag or
+  // continuous zoom doesn't write on every frame). This is the "it survives a
+  // restart" guarantee — like Erwin auto-saving the .erwin file. Gated on
+  // `hydrated` so the initial seed render doesn't clobber a saved model.
+  const saveTimer = useRef(null);
+  useEffect(() => {
+    if (!hydrated.current) return;
+    if (saveTimer.current) clearTimeout(saveTimer.current);
+    saveTimer.current = setTimeout(() => {
+      saveModel({ objects, edges, expanded, subjectAreas, layouts, viewports });
+    }, 400);
+    return () => { if (saveTimer.current) clearTimeout(saveTimer.current); };
+  }, [objects, edges, expanded, subjectAreas, layouts, viewports]);
+
+  // Escape hatch: wipe the saved model and reload to the pristine demo seed
+  // (for screenshots / talks). Without this, persistence would trap the user in
+  // whatever they last left.
+  const resetToDemo = useCallback(() => {
+    clearModel();
+    setObjects(SEED_OBJECTS);
+    setEdges(SEED_EDGES);
+    setExpanded(SEED_EXPANDED);
+    setSubjectAreas(SEED_SUBJECT_AREAS);
+    setLayouts({});
+    setViewports({});
+    setCurrentSA(null);
+    setSelectedId(null);
+  }, []);
 
   const toggleExpand = useCallback((id) => setExpanded((e) => ({ ...e, [id]: !e[id] })), []);
 
@@ -213,6 +276,8 @@ export default function UnifiedModeler() {
             </button>
           )}
           <button className="primary" onClick={exportRegistry} disabled={!allValid}>Export registry</button>
+          <button className="atlas-panel-toggle" onClick={() => setModal('reset')}
+            title="Discard saved changes and reload the demo model">Reset to demo</button>
           <button className="atlas-panel-toggle" onClick={() => setPanelOpen((o) => !o)}
             title={panelOpen ? 'Collapse properties panel' : 'Show properties panel'}>
             {panelOpen ? 'Panel ⟩' : '⟨ Panel'}
@@ -270,6 +335,8 @@ export default function UnifiedModeler() {
           viewId={viewId}
           layout={layouts[viewId]}
           onNodePosition={setNodePosition}
+          viewport={viewports[viewId]}
+          onViewportChange={setViewport}
         />
         {panelOpen && <PropertiesPanel node={selectedNode} onChange={updateSelected} errors={selectedErrors} />}
       </div>
@@ -282,6 +349,21 @@ export default function UnifiedModeler() {
           onSave={() => saveSubjectArea(saEditor)}
           onCancel={() => setSaEditor(null)}
         />
+      )}
+      {modal === 'reset' && (
+        <div className="atlas-modal-backdrop" onClick={() => setModal(null)}>
+          <div className="atlas-modal" onClick={(e) => e.stopPropagation()}>
+            <h2>Reset to demo model?</h2>
+            <p className="atlas-empty">
+              This discards your saved objects, layout, and views, and reloads the
+              built-in demo. This can’t be undone.
+            </p>
+            <div className="atlas-modal-actions">
+              <button className="atlas-slider-reset" onClick={() => setModal(null)}>Cancel</button>
+              <button onClick={() => { resetToDemo(); setModal(null); }}>Reset</button>
+            </div>
+          </div>
+        </div>
       )}
       {modal === 'settings' && <SettingsModal onClose={() => setModal(null)} />}
       {modal === 'about' && <AboutModal onClose={() => setModal(null)} />}

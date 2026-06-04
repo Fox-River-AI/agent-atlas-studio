@@ -7,7 +7,7 @@
 // Step 1 scope (verifiable): nesting + expand/collapse + properties-always-show,
 // with automatic child layout. Create-then-connect relationships, SA switching,
 // and stubs come in later steps.
-import React, { useMemo, useCallback, useState, useEffect } from 'react';
+import React, { useMemo, useCallback, useState, useEffect, useRef } from 'react';
 import {
   ReactFlow,
   Background,
@@ -113,10 +113,13 @@ function UnifiedGraphInner({
   viewId,          // current view id ('all' or an SA id) — changing it reloads layout
   layout,          // { objId: {x,y} } for the current view
   onNodePosition,  // (objId, {x,y}) — persist a dragged position to the current view
+  viewport,        // { x, y, zoom } saved for the current view (or undefined → fit)
+  onViewportChange,// (viewId, {x,y,zoom}) — persist zoom/pan for the current view
 }) {
   const { themeId } = useTheme();
   const colorMode = themeId === 'light' ? 'light' : 'dark';
   const rf = useReactFlow();
+  const paneRef = useRef(null);
 
   // Roots = objects whose parent isn't in the current set (the orchestrator in
   // "All"; the member tasks in a Subject Area, whose parent is filtered out).
@@ -195,24 +198,59 @@ function UnifiedGraphInner({
 
   const handleConnect = useCallback((params) => onConnect?.(params), [onConnect]);
 
-  // Bring a just-created/focused node into view so new objects never appear
-  // off-screen. Runs after the node is laid out.
+  // Bring a focused node into view ONLY if it's off-screen, and WITHOUT changing
+  // zoom — selecting a node in the tree should reveal it, not zoom the canvas to
+  // it. (A just-created node, or one already visible, leaves the framing alone.)
   useEffect(() => {
     if (!focusReq?.id) return;
     const p = positioned.find((n) => n.id === focusReq.id);
     if (!p) return;
     const t = setTimeout(() => {
-      rf.setCenter(p.x + 95, p.y + 30, { zoom: Math.max(rf.getZoom?.() || 1, 0.8), duration: 300 });
+      try {
+        const zoom = rf.getZoom?.() || 1;
+        // Node center in flow coords → screen coords; pan only if outside the pane.
+        const cx = p.x + 95, cy = p.y + 30;
+        const screen = rf.flowToScreenPosition?.({ x: cx, y: cy });
+        const pane = paneRef.current?.getBoundingClientRect?.();
+        const visible = screen && pane &&
+          screen.x > pane.left + 24 && screen.x < pane.right - 24 &&
+          screen.y > pane.top + 24 && screen.y < pane.bottom - 24;
+        if (!visible) rf.setCenter(cx, cy, { zoom, duration: 300 });
+      } catch { /* not ready */ }
     }, 60);
     return () => clearTimeout(t);
   }, [focusReq, positioned, rf]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Fit the view to its content when the VIEW changes (e.g. switching Subject
-  // Areas), so a new view is readable instead of clumped/tiny. (DIAG-10)
+  // On VIEW change: restore that view's saved zoom/pan if it has one; otherwise
+  // fit-to-content (readable first-open). Saved viewport wins so the user's zoom
+  // persists across switches and restarts. (DIAG-9/10)
+  //
+  // `restoreKey` folds the saved viewport into the deps so that when async
+  // hydration brings a viewport in AFTER mount (viewId unchanged), the restore
+  // still fires — otherwise the initial view's saved zoom wouldn't apply until
+  // the user switched views. Don't depend on `viewport` directly: it's a fresh
+  // object every render (would loop). A coarse signature is enough.
+  const hasVp = !!(viewport && Number.isFinite(viewport.zoom));
+  const restoreKey = hasVp ? `${viewport.x},${viewport.y},${viewport.zoom}` : 'fit';
   useEffect(() => {
-    const t = setTimeout(() => { try { rf.fitView({ maxZoom: 1, padding: 0.2, duration: 300 }); } catch { /* not ready */ } }, 80);
+    const t = setTimeout(() => {
+      try {
+        if (hasVp) {
+          rf.setViewport(viewport, { duration: 300 });
+        } else {
+          rf.fitView({ maxZoom: 1, padding: 0.2, duration: 300 });
+        }
+      } catch { /* not ready */ }
+    }, 80);
     return () => clearTimeout(t);
-  }, [viewId, rf]);
+  }, [viewId, restoreKey, rf]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Capture zoom/pan for the current view (debounced) so it persists.
+  const moveTimer = useRef(null);
+  const onMoveEnd = useCallback((_e, vp) => {
+    if (moveTimer.current) clearTimeout(moveTimer.current);
+    moveTimer.current = setTimeout(() => onViewportChange?.(viewId, vp), 200);
+  }, [viewId, onViewportChange]);
 
   // Select on node click ONLY. We deliberately do NOT use onSelectionChange to
   // drive selection: because we rebuild the node array each render (without
@@ -234,7 +272,7 @@ function UnifiedGraphInner({
   }, [onNodesChange, onNodePosition]);
 
   return (
-    <div className="atlas-canvas">
+    <div className="atlas-canvas" ref={paneRef}>
       <ReactFlow
         nodes={rfNodes}
         edges={rfEdges}
@@ -242,10 +280,10 @@ function UnifiedGraphInner({
         onEdgesChange={(c) => { onEdgesChange(c); }}
         onConnect={handleConnect}
         onNodeClick={onNodeClick}
+        onMoveEnd={onMoveEnd}
         nodeTypes={unifiedNodeTypes}
         colorMode={colorMode}
         proOptions={{ hideAttribution: true }}
-        fitView
         fitViewOptions={{ maxZoom: 1, padding: 0.3 }}
         minZoom={0.2}
       >
