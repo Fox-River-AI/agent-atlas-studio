@@ -116,6 +116,12 @@
 .atlas-sa-links { display: flex; gap: 0.75rem; }
 .atlas-sa-new { background: none; border: none; color: var(--agent); font-size: 0.85rem; text-align: left; cursor: pointer; padding: 0.15rem 0; }
 .atlas-sa-new:hover { filter: brightness(1.2); }
+.atlas-sa-showall {
+  display: block; width: 100%; text-align: left; margin-top: 0.35rem;
+  background: none; border: none; color: var(--text-muted);
+  font-size: 0.82rem; cursor: pointer; padding: 0.15rem 0; font-style: italic;
+}
+.atlas-sa-showall:hover { color: var(--agent); }
 .atlas-sa-name { background: var(--bg-input); color: var(--text); border: 1px solid var(--border); border-radius: 5px; padding: 0.4rem 0.5rem; font-size: 0.9rem; width: 100%; }
 .atlas-sa-check { display: flex; align-items: center; gap: 0.5rem; padding: 0.25rem 0; font-size: 0.9rem; cursor: pointer; }
 .atlas-sa-check input { accent-color: var(--accent); }
@@ -262,13 +268,33 @@
 .atlas-slider-reset { background: var(--bg-input); color: var(--text); border: 1px solid var(--border); border-radius: 5px; padding: 0.3rem 0.6rem; font-size: 0.8rem; cursor: pointer; }
 .atlas-slider-sample { margin-top: 0.5rem; font-size: 0.9rem; color: var(--text-muted); }
 
-.atlas-modal-actions { display: flex; justify-content: flex-end; margin-top: 1.25rem; }
+.atlas-modal-actions { display: flex; justify-content: flex-end; gap: 0.5rem; margin-top: 1.25rem; flex-wrap: wrap; }
 .atlas-modal-actions button {
   background: var(--accent); color: var(--accent-fg); border: none; border-radius: 6px;
   padding: 0.5rem 1.1rem; cursor: pointer; font-weight: 600; font-size: 0.95rem;
 }
+.atlas-modal-actions button.danger { background: #d9534f; color: #fff; }
+.atlas-modal-actions button.danger:hover { background: #c9302c; }
 .atlas-modal p { font-size: 0.95rem; line-height: 1.5; color: var(--text-muted); }
 .atlas-modal a { color: var(--agent); }
+
+/* ── Tree right-click context menu (DIAG-12) ── */
+.atlas-ctx-backdrop { position: fixed; inset: 0; z-index: 90; }
+.atlas-ctx-menu {
+  position: fixed; z-index: 91; min-width: 220px;
+  background: var(--bg-elevated); border: 1px solid var(--border);
+  border-radius: 8px; padding: 4px; box-shadow: 0 8px 28px rgba(0, 0, 0, 0.45);
+}
+.atlas-ctx-item {
+  display: block; width: 100%; text-align: left; background: none; border: none;
+  color: var(--text); padding: 0.45rem 0.7rem; border-radius: 5px;
+  cursor: pointer; font-size: 0.9rem;
+}
+.atlas-ctx-item:hover:not(:disabled) { background: var(--accent); color: var(--accent-fg); }
+.atlas-ctx-item:disabled { color: var(--text-muted); cursor: default; opacity: 0.6; }
+.atlas-ctx-item.danger { color: #e9706b; }
+.atlas-ctx-item.danger:hover:not(:disabled) { background: #d9534f; color: #fff; }
+.atlas-ctx-sep { height: 1px; background: var(--border); margin: 4px 2px; }
 
 /* ── Orchestrator: singular palette entry + dedicated control-flow view ── */
 .atlas-item.atlas-singular {
@@ -364,6 +390,10 @@
 }
 .atlas-tree-row:hover { background: var(--bg-elevated); }
 .atlas-tree-row.active { background: var(--bg-elevated); color: var(--accent); }
+/* Hidden-in-view: dimmed + italic, but still present and right-clickable. */
+.atlas-tree-row.hidden-in-view { opacity: 0.45; font-style: italic; }
+.atlas-tree-row.hidden-in-view .atlas-tree-dot { filter: grayscale(1); }
+.atlas-tree-hidden { color: var(--text-muted); font-size: 0.8rem; flex-shrink: 0; }
 .atlas-tree-caret { width: 12px; color: var(--text-muted); font-size: 0.7rem; flex-shrink: 0; }
 .atlas-tree-dot { width: 8px; height: 8px; border-radius: 2px; flex-shrink: 0; }
 .atlas-tree-label { overflow: hidden; text-overflow: ellipsis; }

@@ -221,31 +221,46 @@ function UnifiedGraphInner({
     return () => clearTimeout(t);
   }, [focusReq, positioned, rf]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // On VIEW change: restore that view's saved zoom/pan if it has one; otherwise
-  // fit-to-content (readable first-open). Saved viewport wins so the user's zoom
-  // persists across switches and restarts. (DIAG-9/10)
-  //
-  // `restoreKey` folds the saved viewport into the deps so that when async
-  // hydration brings a viewport in AFTER mount (viewId unchanged), the restore
-  // still fires — otherwise the initial view's saved zoom wouldn't apply until
-  // the user switched views. Don't depend on `viewport` directly: it's a fresh
-  // object every render (would loop). A coarse signature is enough.
+  // Keep the latest saved viewport in a ref so the restore effect can read it
+  // WITHOUT depending on it — depending on `viewport` (a fresh object whose
+  // value drifts as onMoveEnd re-saves) caused a setViewport↔onMoveEnd feedback
+  // loop (the "pulsating zoom"). The effect must fire on view CHANGE only.
+  const viewportRef = useRef(viewport);
+  viewportRef.current = viewport;
+
+  // Restore each view's saved zoom/pan EXACTLY ONCE per view-entry. `restored`
+  // tracks which viewId we've already framed; we only restore/fit when entering
+  // a view we haven't framed yet, so re-renders (and onMoveEnd saves) never
+  // re-trigger framing. Switching away and back re-arms it (we clear the flag
+  // when viewId changes). (DIAG-9/10)
+  // `restored` records, per view, HOW we framed it: 'vp' (applied a saved
+  // viewport) or 'fit' (no viewport yet, fitted to content). Re-entering a view
+  // we already framed with a viewport is a no-op. But if we only fitted because
+  // the saved viewport hadn't hydrated yet, and it later arrives, we upgrade to
+  // it once — without ever re-running on plain viewport-value drift.
+  const restoredView = useRef({}); // { [viewId]: 'vp' | 'fit' }
   const hasVp = !!(viewport && Number.isFinite(viewport.zoom));
-  const restoreKey = hasVp ? `${viewport.x},${viewport.y},${viewport.zoom}` : 'fit';
   useEffect(() => {
+    const prior = restoredView.current[viewId];
+    if (prior === 'vp') return;             // already framed with a viewport
+    if (prior === 'fit' && !hasVp) return;  // already fitted, still no viewport
     const t = setTimeout(() => {
       try {
-        if (hasVp) {
-          rf.setViewport(viewport, { duration: 300 });
+        const vp = viewportRef.current;
+        if (vp && Number.isFinite(vp.zoom)) {
+          rf.setViewport(vp, { duration: 300 });
+          restoredView.current[viewId] = 'vp';
         } else {
           rf.fitView({ maxZoom: 1, padding: 0.2, duration: 300 });
+          restoredView.current[viewId] = 'fit';
         }
       } catch { /* not ready */ }
     }, 80);
     return () => clearTimeout(t);
-  }, [viewId, restoreKey, rf]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [viewId, hasVp, rf]);
 
-  // Capture zoom/pan for the current view (debounced) so it persists.
+  // Capture zoom/pan for the current view (debounced) so it persists. This only
+  // WRITES state; it never triggers the restore effect (which keys off viewId).
   const moveTimer = useRef(null);
   const onMoveEnd = useCallback((_e, vp) => {
     if (moveTimer.current) clearTimeout(moveTimer.current);

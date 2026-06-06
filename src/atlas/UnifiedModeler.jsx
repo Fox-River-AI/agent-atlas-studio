@@ -37,6 +37,9 @@ export default function UnifiedModeler() {
   const [currentSA, setCurrentSA] = useState(null);
   const [saEditor, setSaEditor] = useState(null); // { id, name, taskIds } being edited
   const [exportMsg, setExportMsg] = useState('');
+  // Delete-with-intent (DIAG-11): { id, label, kind, inView } — the object the
+  // user asked to delete; the modal asks "from this view" vs "from the model".
+  const [deleteReq, setDeleteReq] = useState(null);
   // Per-VIEW node layout (Erwin-style saved diagrams): layouts[viewId][objId] = {x,y}.
   // viewId is 'all' or the SA id. The same object can sit differently per view.
   // Positions live HERE, not on the object — so selection never re-lays-out.
@@ -76,6 +79,15 @@ export default function UnifiedModeler() {
     return () => { cancelled = true; };
   }, []);
 
+  // Suppress the webview's native "Reload / Inspect" context menu app-wide — a
+  // desktop modeling app never wants it, and our own right-click menus open via
+  // React handlers that run regardless of this document-level preventDefault.
+  useEffect(() => {
+    const block = (e) => e.preventDefault();
+    document.addEventListener('contextmenu', block);
+    return () => document.removeEventListener('contextmenu', block);
+  }, []);
+
   // Auto-save the whole model whenever any part changes (debounced so a drag or
   // continuous zoom doesn't write on every frame). This is the "it survives a
   // restart" guarantee — like Erwin auto-saving the .erwin file. Gated on
@@ -110,6 +122,9 @@ export default function UnifiedModeler() {
   // The current SA's visible object ids = its tasks + everything nested under
   // them (descendants via the parent chain). null SA = the whole model.
   const sa = currentSA ? subjectAreas.find((s) => s.id === currentSA) : null;
+  // Objects that BELONG to the current view = its tasks + all descendants. This
+  // is what the left TREE shows — hidden objects still appear here (dimmed), so
+  // you can right-click → Show. (null SA = the whole model.)
   const visibleObjects = useMemo(() => {
     if (!sa) return objects;
     const childrenByParent = {};
@@ -121,6 +136,27 @@ export default function UnifiedModeler() {
     sa.taskIds.forEach(walk);
     return Object.fromEntries(Object.entries(objects).filter(([id]) => keep.has(id)));
   }, [objects, sa]);
+
+  // The set of ids hidden in the current view, EXPANDED to include descendants
+  // (hiding a container hides its subtree). Tree uses it to dim; canvas to omit.
+  const hiddenInView = useMemo(() => {
+    const out = new Set();
+    if (!sa) return out;
+    const childrenByParent = {};
+    for (const o of Object.values(objects)) {
+      if (o.parent) (childrenByParent[o.parent] ||= []).push(o.id);
+    }
+    const walk = (id) => { if (out.has(id) || !objects[id]) return; out.add(id); (childrenByParent[id] || []).forEach(walk); };
+    (sa.hiddenIds || []).forEach(walk);
+    return out;
+  }, [objects, sa]);
+
+  // What the CANVAS draws = view objects minus the hidden ones.
+  const canvasObjects = useMemo(() => {
+    if (!sa) return objects;
+    if (hiddenInView.size === 0) return visibleObjects;
+    return Object.fromEntries(Object.entries(visibleObjects).filter(([id]) => !hiddenInView.has(id)));
+  }, [sa, objects, visibleObjects, hiddenInView]);
 
   const allTasks = useMemo(() => Object.values(objects).filter((o) => o.kind === 'task'), [objects]);
 
@@ -140,6 +176,85 @@ export default function UnifiedModeler() {
     setSaEditor(null);
   };
   const editCurrentSA = () => { if (sa) setSaEditor({ ...sa }); };
+
+  // ── Erwin-style object actions (DIAG-11/12/13) ──
+  // Workflow (Randy's design):
+  //  • DELETE from the model is permitted ONLY in "All" (whole model). It removes
+  //    the object + its subtree + edges everywhere, and prunes SA references.
+  //  • In a Subject Area you can only HIDE / SHOW an object (with its subtree).
+  //    Hidden objects stay in the model AND in the left tree (dimmed) — you
+  //    right-click → "Show in this view" to bring them back onto the canvas.
+  //  • The orchestrator is the model root and is never deletable.
+
+  // All ids in the subtree rooted at `id` (inclusive).
+  const descendantsOf = useCallback((id, objs) => {
+    const childrenByParent = {};
+    for (const o of Object.values(objs)) {
+      if (o.parent) (childrenByParent[o.parent] ||= []).push(o.id);
+    }
+    const out = [];
+    const walk = (x) => { out.push(x); (childrenByParent[x] || []).forEach(walk); };
+    walk(id);
+    return out;
+  }, []);
+
+  // Delete an object (and its subtree) from the whole model.
+  const deleteFromModel = useCallback((id) => {
+    setObjects((objs) => {
+      if (!objs[id] || objs[id].kind === 'orchestrator') return objs;
+      const doomed = new Set(descendantsOf(id, objs));
+      const next = Object.fromEntries(Object.entries(objs).filter(([k]) => !doomed.has(k)));
+      // Prune edges and SA taskIds that referenced the removed objects.
+      setEdges((es) => es.filter((e) => !doomed.has(e.source) && !doomed.has(e.target)));
+      setSubjectAreas((sas) => sas.map((s) => ({ ...s, taskIds: s.taskIds.filter((t) => !doomed.has(t)) })));
+      setLayouts((L) => {
+        const cleaned = {};
+        for (const [v, m] of Object.entries(L)) {
+          cleaned[v] = Object.fromEntries(Object.entries(m).filter(([oid]) => !doomed.has(oid)));
+        }
+        return cleaned;
+      });
+      return next;
+    });
+    setSelectedId((cur) => (cur === id ? null : cur));
+  }, [descendantsOf]);
+
+  // Toggle hide/show for a SINGLE object in the CURRENT view (Erwin "remove from
+  // / add to diagram"). Per-OBJECT — clicking a tool hides only that tool (and
+  // its subtree visually), never its whole task. The object stays in the model
+  // and the left tree. No-op in "All".
+  const toggleHideInView = useCallback((id) => {
+    if (!currentSA) return;
+    setSubjectAreas((sas) => sas.map((s) => {
+      if (s.id !== currentSA) return s;
+      const hidden = s.hiddenIds || [];
+      return hidden.includes(id)
+        ? { ...s, hiddenIds: hidden.filter((h) => h !== id) } // show
+        : { ...s, hiddenIds: [...hidden, id] };               // hide
+    }));
+  }, [currentSA]);
+
+  // Un-hide everything in the current view (clears the SA's hidden set).
+  const showAllInView = useCallback(() => {
+    if (!currentSA) return;
+    setSubjectAreas((sas) => sas.map((s) => (s.id === currentSA ? { ...s, hiddenIds: [] } : s)));
+  }, [currentSA]);
+
+  // Go To: select + focus on the canvas.
+  const goToObject = useCallback((id) => {
+    setSelectedId(id);
+    setPanelOpen(true);
+    setFocusReq((f) => ({ id, n: (f?.n || 0) + 1 }));
+  }, []);
+
+  // Open the delete confirm. Delete is ONLY available in "All" (no SA), so this
+  // is a straight from-model confirm. The orchestrator root is never deletable.
+  const requestDelete = useCallback((id) => {
+    if (currentSA) return; // safety: no deleting from inside a Subject Area
+    const o = objects[id];
+    if (!o || o.kind === 'orchestrator') return;
+    setDeleteReq({ id, label: o.data?.label || o.data?.id || o.id, kind: o.kind });
+  }, [objects, currentSA]);
 
   // The unified objects, in the {id,type,data} node shape buildRegistry/manifestFor expect.
   const asNodes = useMemo(
@@ -321,9 +436,17 @@ export default function UnifiedModeler() {
           onToggleCollapse={() => setTreeCollapsed((c) => !c)}
           onOpenSettings={() => setModal('settings')}
           onOpenAbout={() => setModal('about')}
+          inSubjectArea={!!currentSA}
+          canDelete={!currentSA}
+          hiddenIds={hiddenInView}
+          onGoTo={goToObject}
+          onToggleHide={toggleHideInView}
+          onDelete={requestDelete}
+          hiddenCount={sa ? (sa.hiddenIds || []).length : 0}
+          onShowAllInView={showAllInView}
         />
         <UnifiedGraph
-          objects={visibleObjects}
+          objects={canvasObjects}
           edges={edges}
           expanded={expanded}
           onToggleExpand={toggleExpand}
@@ -361,6 +484,21 @@ export default function UnifiedModeler() {
             <div className="atlas-modal-actions">
               <button className="atlas-slider-reset" onClick={() => setModal(null)}>Cancel</button>
               <button onClick={() => { resetToDemo(); setModal(null); }}>Reset</button>
+            </div>
+          </div>
+        </div>
+      )}
+      {deleteReq && (
+        <div className="atlas-modal-backdrop" onClick={() => setDeleteReq(null)}>
+          <div className="atlas-modal" onClick={(e) => e.stopPropagation()}>
+            <h2>Delete “{deleteReq.label}”?</h2>
+            <p className="atlas-empty">
+              This deletes the {deleteReq.kind} from the model, including
+              everything nested under it and its relationships. This can’t be undone.
+            </p>
+            <div className="atlas-modal-actions">
+              <button className="atlas-slider-reset" onClick={() => setDeleteReq(null)}>Cancel</button>
+              <button className="danger" onClick={() => { deleteFromModel(deleteReq.id); setDeleteReq(null); }}>Delete from model</button>
             </div>
           </div>
         </div>
