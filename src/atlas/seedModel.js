@@ -137,7 +137,7 @@ export const SEED_EXPANDED = {
 
 // Subject Areas that TAME the complexity — focus the whole platform to one slice.
 export const SEED_SUBJECT_AREAS = [
-  { id: 'sa-gateway', name: 'Gateway & Ingestion', taskIds: ['gateway-ingest'], hiddenIds: [] },
-  { id: 'sa-grounding', name: 'Ontology Grounding (SNOMED/ICD)', taskIds: ['extract-concepts', 'ground-ontology'], hiddenIds: [] },
-  { id: 'sa-financial', name: 'Financial & Safety Impact', taskIds: ['apply-rules', 'score-impact'], hiddenIds: [] },
+  { id: 'sa-gateway', name: 'Gateway & Ingestion', memberIds: ['gateway-ingest'], hiddenIds: [] },
+  { id: 'sa-grounding', name: 'Ontology Grounding (SNOMED/ICD)', memberIds: ['extract-concepts', 'ground-ontology'], hiddenIds: [] },
+  { id: 'sa-financial', name: 'Financial & Safety Impact', memberIds: ['apply-rules', 'score-impact'], hiddenIds: [] },
 ];

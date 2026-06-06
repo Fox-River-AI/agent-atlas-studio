@@ -20,6 +20,18 @@ export function canConnect(sourceKind, targetKind) {
   return !!ALLOWED_TARGETS[sourceKind]?.has(targetKind);
 }
 
+// The kinds that may CONTAIN (be the parent of) a given child kind — the reverse
+// of ALLOWED_TARGETS. Used when creating an object to offer only valid parents.
+export function parentKindsFor(childKind) {
+  return Object.keys(ALLOWED_TARGETS).filter((k) => ALLOWED_TARGETS[k].has(childKind));
+}
+
+// The kinds a given parent kind may CONTAIN (its legal direct children). Used by
+// the "Add child" context-menu submenu so it only offers valid kinds.
+export function childKindsFor(parentKind) {
+  return [...(ALLOWED_TARGETS[parentKind] || [])];
+}
+
 // Human-readable reason for a rejected connection (for a toast/hint).
 export function connectionReason(sourceKind, targetKind) {
   if (canConnect(sourceKind, targetKind)) return null;

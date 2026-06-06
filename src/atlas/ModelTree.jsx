@@ -5,11 +5,13 @@
 // expands/collapses, shared with the canvas's expand state.
 import React, { useMemo } from 'react';
 import { CREATABLE_KINDS } from './blankData';
+import { childKindsFor } from './relationships';
 
 const KIND_DOT = {
   orchestrator: '#ff5c8a', task: 'var(--accent)', agent: 'var(--agent)', tool: 'var(--tool)',
   job: '#e0b35c', system: '#7aa2ff', router: '#e879c7',
 };
+const KIND_LABEL = Object.fromEntries(CREATABLE_KINDS.map((k) => [k.kind, k.label]));
 
 function childrenOf(parentId, objects) {
   return Object.values(objects)
@@ -55,15 +57,41 @@ function TreeRow({ obj, objects, depth, expanded, onToggle, selectedId, onSelect
 // Erwin-style right-click menu for a tree object (DIAG-12). Inside a Subject Area
 // you can only Hide/Show (toggle). Delete-from-model is offered ONLY in "All"
 // (canDelete) and never for the orchestrator root.
-function ContextMenu({ ctx, inSubjectArea, canDelete, isHidden, onGoTo, onToggleHide, onDelete, onClose }) {
+function ContextMenu({ ctx, inSubjectArea, canDelete, isHidden, onGoTo, onToggleHide, onDelete, onAddChild, onClose }) {
   const { obj, x, y } = ctx;
   const isRoot = obj.kind === 'orchestrator';
+  const childKinds = childKindsFor(obj.kind); // legal direct children of this object
+  const [submenu, setSubmenu] = React.useState(false);
   const act = (fn) => { fn(obj.id); onClose(); };
   return (
     <>
       <div className="atlas-ctx-backdrop" onClick={onClose} onContextMenu={(e) => { e.preventDefault(); onClose(); }} />
       <div className="atlas-ctx-menu" style={{ left: x, top: y }} role="menu">
         <button className="atlas-ctx-item" onClick={() => act(onGoTo)}>Go to object on canvas</button>
+
+        {childKinds.length > 0 && (
+          <>
+            <div className="atlas-ctx-sep" />
+            <div
+              className="atlas-ctx-sub"
+              onMouseEnter={() => setSubmenu(true)}
+              onMouseLeave={() => setSubmenu(false)}
+            >
+              <button className="atlas-ctx-item has-sub">Add child ▸</button>
+              {submenu && (
+                <div className="atlas-ctx-submenu" role="menu">
+                  {childKinds.map((k) => (
+                    <button key={k} className="atlas-ctx-item"
+                      onClick={() => { onAddChild(obj.id, k); onClose(); }}>
+                      {KIND_LABEL[k] || k}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          </>
+        )}
+
         {inSubjectArea && (
           <>
             <div className="atlas-ctx-sep" />
@@ -90,12 +118,25 @@ function ContextMenu({ ctx, inSubjectArea, canDelete, isHidden, onGoTo, onToggle
   );
 }
 
+// Context menu for BLANK space (no object). The orchestrator is the always-present
+// root, so the only top-level add is a Task (which nests under it).
+function BlankContextMenu({ pos, onAddTopLevel, onClose }) {
+  return (
+    <>
+      <div className="atlas-ctx-backdrop" onClick={onClose} onContextMenu={(e) => { e.preventDefault(); onClose(); }} />
+      <div className="atlas-ctx-menu" style={{ left: pos.x, top: pos.y }} role="menu">
+        <button className="atlas-ctx-item" onClick={() => { onAddTopLevel('task'); onClose(); }}>Add Task</button>
+      </div>
+    </>
+  );
+}
+
 export default function ModelTree({
   objects, expanded, onToggle, selectedId, onSelect, validityById,
   subjectAreas, currentSA, onSelectSA, onNewSA, onEditSA,
   onCreate, collapsed, onToggleCollapse, onOpenSettings, onOpenAbout,
   inSubjectArea, canDelete, hiddenIds, onGoTo, onToggleHide, onDelete,
-  hiddenCount = 0, onShowAllInView,
+  hiddenCount = 0, onShowAllInView, onAddChild, onAddTopLevel,
 }) {
   // Roots = objects whose parent is not in the current (possibly SA-filtered)
   // set. In "All" that's the orchestrator; in a Subject Area it's the member
@@ -109,13 +150,25 @@ export default function ModelTree({
   const [createOpen, setCreateOpen] = React.useState(false);
   // Right-click context menu: { obj, x, y } or null. (DIAG-12)
   const [ctx, setCtx] = React.useState(null);
+  // Blank-space right-click menu (top-level add): { x, y } or null.
+  const [blankCtx, setBlankCtx] = React.useState(null);
   const openContextMenu = React.useCallback((e, obj) => {
     e.preventDefault();
     e.stopPropagation();
+    setBlankCtx(null);
     onSelect(obj.id); // selecting the right-clicked row matches Erwin/most apps
     setCtx({ obj, x: e.clientX, y: e.clientY });
   }, [onSelect]);
-  const closeContextMenu = React.useCallback(() => setCtx(null), []);
+  const openBlankMenu = React.useCallback((e) => {
+    // Only when the right-click is on empty tree space, not a row (rows
+    // stopPropagation). Top-level add is a whole-model action, so suppress it
+    // inside a Subject Area (you add via a parent there).
+    e.preventDefault();
+    if (inSubjectArea) return;
+    setCtx(null);
+    setBlankCtx({ x: e.clientX, y: e.clientY });
+  }, [inSubjectArea]);
+  const closeContextMenu = React.useCallback(() => { setCtx(null); setBlankCtx(null); }, []);
 
   if (collapsed) {
     return (
@@ -167,8 +220,12 @@ export default function ModelTree({
         )}
       </div>
 
-      <div className="atlas-tree">
-        {roots.length === 0 && <div className="atlas-empty">— empty model —</div>}
+      <div className="atlas-tree" onContextMenu={openBlankMenu}>
+        {roots.length === 0 && (
+          <div className="atlas-empty">
+            — empty model —{!inSubjectArea && <><br />right-click to add a Task</>}
+          </div>
+        )}
         {roots.map((r) => (
           <TreeRow key={r.id} obj={r} objects={objects} depth={0}
             expanded={expanded} onToggle={onToggle} selectedId={selectedId} onSelect={onSelect}
@@ -185,6 +242,14 @@ export default function ModelTree({
           onGoTo={onGoTo}
           onToggleHide={onToggleHide}
           onDelete={onDelete}
+          onAddChild={onAddChild}
+          onClose={closeContextMenu}
+        />
+      )}
+      {blankCtx && (
+        <BlankContextMenu
+          pos={blankCtx}
+          onAddTopLevel={onAddTopLevel}
           onClose={closeContextMenu}
         />
       )}
