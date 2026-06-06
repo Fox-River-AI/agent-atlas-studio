@@ -12,7 +12,7 @@ function Field({ label, hint, children }) {
   );
 }
 
-export default function PropertiesPanel({ node, onChange, errors }) {
+export default function PropertiesPanel({ node, onChange, errors, dirty, canSave, onSave, onRevert, newObject }) {
   if (!node) {
     return (
       <div className="atlas-panel empty">
@@ -28,7 +28,17 @@ export default function PropertiesPanel({ node, onChange, errors }) {
     // autoCapitalize/Correct/spellCheck off so ids like "db-connect" aren't
     // mangled to "Db-connect" by the webview (WebKit inherits these to inputs).
     <div className="atlas-panel" autoCapitalize="off" autoCorrect="off" spellCheck={false}>
-      <h3>{{ orchestrator: 'Orchestrator', task: 'Task', agent: 'Agent', tool: 'MCP Tool', job: 'Job', system: 'External System', router: 'Router' }[node.type] || node.type}</h3>
+      <div className="atlas-panel-bar">
+        <h3>{{ orchestrator: 'Orchestrator', task: 'Task', agent: 'Agent', tool: 'MCP Tool', job: 'Job', system: 'External System', router: 'Router' }[node.type] || node.type}{dirty && <span className="atlas-dirty-dot" title="Unsaved changes"> ●</span>}</h3>
+        <div className="atlas-panel-actions">
+          <button className="atlas-revert" onClick={onRevert} disabled={!dirty} title={newObject ? 'Discard this new object' : 'Revert changes'}>
+            {newObject ? 'Discard' : 'Revert'}
+          </button>
+          <button className="atlas-save" onClick={onSave} disabled={!canSave} title={canSave ? 'Save changes' : 'Fill required fields to save'}>
+            Save
+          </button>
+        </div>
+      </div>
 
       {node.type === 'task' ? (
         <>
@@ -63,7 +73,7 @@ export default function PropertiesPanel({ node, onChange, errors }) {
               value={d.responsibility || ''}
               onChange={(e) => set({ responsibility: e.target.value })}
               rows={3}
-              placeholder="Classify an inbound message into one support category and urgency."
+              placeholder="Classify an inbound message into a single support category."
             />
           </Field>
 
@@ -254,7 +264,7 @@ export default function PropertiesPanel({ node, onChange, errors }) {
 
       {errors && errors.length > 0 && (
         <div className="atlas-errors">
-          <strong>Not yet valid:</strong>
+          <strong>Required to be valid:</strong>
           <ul>{errors.map((er, i) => <li key={i}>{er}</li>)}</ul>
         </div>
       )}

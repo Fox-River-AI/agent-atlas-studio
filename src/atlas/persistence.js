@@ -31,11 +31,20 @@ function lsStore() {
 
 function normalize(data) {
   if (!data || data.version !== VERSION || typeof data.objects !== 'object') return null;
+  // Migrate Subject Areas to the general-membership shape: SAs used to be defined
+  // by taskIds (tasks + descendants); they're now defined by memberIds (any
+  // objects). Old saves with taskIds load unchanged (taskIds → memberIds).
+  const subjectAreas = (Array.isArray(data.subjectAreas) ? data.subjectAreas : []).map((s) => ({
+    id: s.id,
+    name: s.name,
+    memberIds: s.memberIds ?? s.taskIds ?? [],
+    hiddenIds: s.hiddenIds ?? [],
+  }));
   return {
     objects: data.objects,
     edges: Array.isArray(data.edges) ? data.edges : [],
     expanded: data.expanded || {},
-    subjectAreas: Array.isArray(data.subjectAreas) ? data.subjectAreas : [],
+    subjectAreas,
     layouts: data.layouts || {},
     viewports: data.viewports || {},
   };

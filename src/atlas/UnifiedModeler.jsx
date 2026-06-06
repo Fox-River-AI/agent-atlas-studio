@@ -12,7 +12,7 @@ import { SettingsModal, AboutModal } from './Modals';
 import { VALIDATORS, formatErrors, DEFAULT_MODEL } from './schema';
 import { manifestFor, buildRegistry } from './model';
 import { blankData, CREATABLE_KINDS } from './blankData';
-import { canConnect, connectionReason } from './relationships';
+import { canConnect, connectionReason, parentKindsFor } from './relationships';
 import { namedIssues } from './validationMessages';
 import './atlas.css';
 import { SEED_OBJECTS, SEED_EDGES, SEED_EXPANDED, SEED_SUBJECT_AREAS } from './seedModel';
@@ -32,14 +32,24 @@ export default function UnifiedModeler() {
   const [treeCollapsed, setTreeCollapsed] = useState(false);
   const [panelOpen, setPanelOpen] = useState(true);
   const [modal, setModal] = useState(null); // 'settings' | 'about'
-  // Subject Areas = saved views: { id, name, taskIds: [] }. null = whole model.
+  // Subject Areas = saved views: { id, name, memberIds: [], hiddenIds: [] }. null = whole model.
   const [subjectAreas, setSubjectAreas] = useState(SEED_SUBJECT_AREAS);
   const [currentSA, setCurrentSA] = useState(null);
-  const [saEditor, setSaEditor] = useState(null); // { id, name, taskIds } being edited
+  const [saEditor, setSaEditor] = useState(null); // { id, name, memberIds } being edited
   const [exportMsg, setExportMsg] = useState('');
-  // Delete-with-intent (DIAG-11): { id, label, kind, inView } — the object the
-  // user asked to delete; the modal asks "from this view" vs "from the model".
+  // Delete confirm: { id, label, kind } — only reachable in "All".
   const [deleteReq, setDeleteReq] = useState(null);
+  // Create flow: the chosen kind, awaiting a parent pick. null = closed.
+  const [createKind, setCreateKind] = useState(null);
+  // A just-created object that has never been committed — discarding it deletes
+  // it (vs. reverting an existing object's edits).
+  const [pendingNew, setPendingNew] = useState(null); // objId or null
+  // Per-object DRAFT (Feature A): edits accumulate here, NOT in the model, until
+  // the user clicks Save. { id, data } or null. The model only changes on Save.
+  const [draft, setDraft] = useState(null);
+  // Navigation guard prompt when leaving a dirty/new draft:
+  // { run } — `run` performs the deferred navigation after the user decides.
+  const [navReq, setNavReq] = useState(null);
   // Per-VIEW node layout (Erwin-style saved diagrams): layouts[viewId][objId] = {x,y}.
   // viewId is 'all' or the SA id. The same object can sit differently per view.
   // Positions live HERE, not on the object — so selection never re-lays-out.
@@ -67,7 +77,15 @@ export default function UnifiedModeler() {
     (async () => {
       const saved = await loadModel();
       if (!cancelled && saved) {
-        setObjects(saved.objects);
+        // Guarantee the single orchestrator root exists (a corrupt save could
+        // lack it; the orchestrator is never user-deletable but be defensive).
+        let objs = saved.objects;
+        if (!Object.values(objs).some((o) => o.kind === 'orchestrator')) {
+          const orch = SEED_OBJECTS['cdi-orchestrator']
+            || { id: 'orchestrator', kind: 'orchestrator', parent: null, data: blankData('orchestrator') };
+          objs = { ...objs, [orch.id]: orch };
+        }
+        setObjects(objs);
         setEdges(saved.edges);
         setExpanded(saved.expanded);
         setSubjectAreas(saved.subjectAreas);
@@ -122,9 +140,12 @@ export default function UnifiedModeler() {
   // The current SA's visible object ids = its tasks + everything nested under
   // them (descendants via the parent chain). null SA = the whole model.
   const sa = currentSA ? subjectAreas.find((s) => s.id === currentSA) : null;
-  // Objects that BELONG to the current view = its tasks + all descendants. This
-  // is what the left TREE shows — hidden objects still appear here (dimmed), so
-  // you can right-click → Show. (null SA = the whole model.)
+  // Objects that BELONG to the current view. Membership is explicit (memberIds),
+  // with two expansions: checking a CONTAINER includes its whole subtree
+  // (descendants), and the ANCESTORS of every member are shown for structural
+  // context (so nothing floats rootless) — ancestors aren't members themselves.
+  // This is what the left TREE shows; hidden objects still appear here (dimmed).
+  // (null SA = the whole model.)
   const visibleObjects = useMemo(() => {
     if (!sa) return objects;
     const childrenByParent = {};
@@ -132,9 +153,16 @@ export default function UnifiedModeler() {
       if (o.parent) (childrenByParent[o.parent] ||= []).push(o.id);
     }
     const keep = new Set();
-    const walk = (id) => { if (keep.has(id) || !objects[id]) return; keep.add(id); (childrenByParent[id] || []).forEach(walk); };
-    sa.taskIds.forEach(walk);
-    return Object.fromEntries(Object.entries(objects).filter(([id]) => keep.has(id)));
+    // member + descendants (container check = whole subtree)
+    const down = (id) => { if (keep.has(id) || !objects[id]) return; keep.add(id); (childrenByParent[id] || []).forEach(down); };
+    (sa.memberIds || []).forEach(down);
+    // ancestors of everything kept so far (for context; parent chain)
+    const withAncestors = new Set(keep);
+    for (const id of keep) {
+      let cur = objects[id]?.parent;
+      while (cur && objects[cur] && !withAncestors.has(cur)) { withAncestors.add(cur); cur = objects[cur].parent; }
+    }
+    return Object.fromEntries(Object.entries(objects).filter(([id]) => withAncestors.has(id)));
   }, [objects, sa]);
 
   // The set of ids hidden in the current view, EXPANDED to include descendants
@@ -158,14 +186,13 @@ export default function UnifiedModeler() {
     return Object.fromEntries(Object.entries(visibleObjects).filter(([id]) => !hiddenInView.has(id)));
   }, [sa, objects, visibleObjects, hiddenInView]);
 
-  const allTasks = useMemo(() => Object.values(objects).filter((o) => o.kind === 'task'), [objects]);
 
   // ── Subject Area management ──
   // Open the editor modal directly (name is typed IN the modal). Do NOT use
   // window.prompt — Tauri's webview returns null from it, so the dialog never
   // appeared and "New Subject Area" silently did nothing.
   const newSubjectArea = () => {
-    setSaEditor({ id: `sa-${Date.now().toString(36)}`, name: '', taskIds: [] });
+    setSaEditor({ id: `sa-${Date.now().toString(36)}`, name: '', memberIds: [], hiddenIds: [] });
   };
   const saveSubjectArea = (editor) => {
     setSubjectAreas((sas) => {
@@ -204,9 +231,13 @@ export default function UnifiedModeler() {
       if (!objs[id] || objs[id].kind === 'orchestrator') return objs;
       const doomed = new Set(descendantsOf(id, objs));
       const next = Object.fromEntries(Object.entries(objs).filter(([k]) => !doomed.has(k)));
-      // Prune edges and SA taskIds that referenced the removed objects.
+      // Prune edges and SA membership/hidden refs that pointed at removed objects.
       setEdges((es) => es.filter((e) => !doomed.has(e.source) && !doomed.has(e.target)));
-      setSubjectAreas((sas) => sas.map((s) => ({ ...s, taskIds: s.taskIds.filter((t) => !doomed.has(t)) })));
+      setSubjectAreas((sas) => sas.map((s) => ({
+        ...s,
+        memberIds: (s.memberIds || []).filter((m) => !doomed.has(m)),
+        hiddenIds: (s.hiddenIds || []).filter((h) => !doomed.has(h)),
+      })));
       setLayouts((L) => {
         const cleaned = {};
         for (const [v, m] of Object.entries(L)) {
@@ -240,12 +271,10 @@ export default function UnifiedModeler() {
     setSubjectAreas((sas) => sas.map((s) => (s.id === currentSA ? { ...s, hiddenIds: [] } : s)));
   }, [currentSA]);
 
-  // Go To: select + focus on the canvas.
-  const goToObject = useCallback((id) => {
-    setSelectedId(id);
-    setPanelOpen(true);
-    setFocusReq((f) => ({ id, n: (f?.n || 0) + 1 }));
-  }, []);
+  // Go To: select + zoom the canvas IN on the object (explicit navigation, unlike
+  // a plain tree click which only reveals it). The `zoom` flag tells the canvas
+  // to actually change zoom.
+  // goToObject is defined later (after selectObject) so it can reuse the guard.
 
   // Open the delete confirm. Delete is ONLY available in "All" (no SA), so this
   // is a straight from-model confirm. The orchestrator root is never deletable.
@@ -262,20 +291,45 @@ export default function UnifiedModeler() {
     [objects]
   );
 
-  let seq = Object.keys(objects).length;
-  // Create a new object (top-level until connected). Select it so its
-  // properties open ready to edit.
-  const createObject = (kind) => {
-    seq += 1;
+  // Create a new object already NESTED under a chosen parent (Erwin-style), so it
+  // appears in both the main model AND the current Subject Area immediately —
+  // no dangling top-level root, no create-then-connect Catch-22 inside a view.
+  // parentId null is only valid for a top-level task (parented to the
+  // orchestrator if one exists). For a task created inside an SA, we also add it
+  // to that SA's memberIds so the view actually shows it.
+  const createObject = useCallback((kind, parentId = null) => {
+    const seq = Object.keys(objects).length + 1;
     const id = `${kind}-${seq}`;
-    setObjects((o) => ({ ...o, [id]: { id, kind, parent: null, data: blankData(kind) } }));
-    // Place near the currently-selected node, in the CURRENT view's layout.
-    const anchor = selectedId && layouts[viewId]?.[selectedId];
+    // A top-level task auto-parents to the single orchestrator if present.
+    let parent = parentId;
+    if (!parent && kind === 'task') {
+      const orch = Object.values(objects).find((o) => o.kind === 'orchestrator');
+      parent = orch ? orch.id : null;
+    }
+    setObjects((o) => ({ ...o, [id]: { id, kind, parent, data: blankData(kind) } }));
+    // Establish the containment edge so the relationship is explicit too.
+    if (parent) {
+      setEdges((es) => (es.some((e) => e.source === parent && e.target === id)
+        ? es : [...es, { id: `e-${parent}-${id}`, source: parent, target: id }]));
+      setExpanded((e) => ({ ...e, [parent]: true }));
+    }
+    // If created inside an SA, include the new object in that view (membership
+    // is general now, so any kind can be a direct member).
+    if (currentSA) {
+      setSubjectAreas((sas) => sas.map((s) =>
+        s.id === currentSA && !s.memberIds.includes(id) ? { ...s, memberIds: [...s.memberIds, id] } : s));
+    }
+    // Place near the parent (or the selected node) in the CURRENT view's layout.
+    const anchorId = parent || selectedId;
+    const anchor = anchorId && layouts[viewId]?.[anchorId];
     const position = anchor ? { x: anchor.x + 60, y: anchor.y + 130 } : { x: 140, y: 120 };
     setNodePosition(id, position);
     setSelectedId(id);
-    setFocusReq({ id, n: (focusReq?.n || 0) + 1 });
-  };
+    setPanelOpen(true);
+    setPendingNew(id); // brand-new → discarding deletes it
+    setDraft({ id, data: blankData(kind) }); // edit the new object as a draft
+    setFocusReq((f) => ({ id, n: (f?.n || 0) + 1 }));
+  }, [objects, currentSA, selectedId, layouts, viewId, setNodePosition]);
 
   // Draw a relationship: source → target. This also establishes nesting —
   // the target becomes the source's child (Erwin "create then connect"). Expand
@@ -320,6 +374,51 @@ export default function UnifiedModeler() {
   const issues = useMemo(() => namedIssues(problemsByObj, objects), [problemsByObj, objects]);
   const [showIssues, setShowIssues] = useState(false);
 
+  // Run a navigation, but if the current draft is dirty, defer it behind the
+  // The panel edits the DRAFT, not the model. The draft mirrors the selected
+  // object's data and is the working copy until Save. (Defined here, before the
+  // navigation guard that depends on draftDirty.)
+  const draftNode = (draft && objects[draft.id])
+    ? { id: draft.id, type: objects[draft.id].kind, data: draft.data }
+    : null;
+  const editDraft = (id, patch) => setDraft((d) => (d && d.id === id ? { ...d, data: { ...d.data, ...patch } } : d));
+  // Dirty = draft differs from committed (a brand-new object is always dirty so
+  // its discard-deletes flow works even before any edit).
+  const draftDirty = !!draft && (
+    pendingNew === draft.id ||
+    JSON.stringify(draft.data) !== JSON.stringify(objects[draft.id]?.data)
+  );
+
+  // Save/Discard/Cancel prompt. ALL navigation (tree, canvas, go-to, issues, SA
+  // switch, reset, SA editor) routes through this so unsaved edits are never
+  // silently lost.
+  const guardedNavigate = useCallback((run) => {
+    if (draftDirty) { setNavReq({ run }); return; }
+    run();
+  }, [draftDirty]);
+
+  // Perform the actual selection + draft (re)initialization. Not guarded — the
+  // guard wraps the callers.
+  const doSelect = useCallback((nextId, opts = {}) => {
+    setSelectedId(nextId);
+    setDraft(nextId && objects[nextId]
+      ? { id: nextId, data: JSON.parse(JSON.stringify(objects[nextId].data)) }
+      : null);
+    if (nextId) setPanelOpen(true);
+    if (nextId && opts.focus) setFocusReq((f) => ({ id: nextId, n: (f?.n || 0) + 1, zoom: opts.zoom }));
+  }, [objects]);
+
+  const selectObject = useCallback((nextId, opts = {}) => {
+    if (nextId === selectedId) return; // re-selecting self: keep the draft
+    guardedNavigate(() => doSelect(nextId, opts));
+  }, [selectedId, guardedNavigate, doSelect]);
+
+  // Go To (context menu): select + zoom the canvas IN on the object.
+  const goToObject = useCallback((id) => {
+    if (id === selectedId) { setFocusReq((f) => ({ id, n: (f?.n || 0) + 1, zoom: true })); return; }
+    guardedNavigate(() => doSelect(id, { focus: true, zoom: true }));
+  }, [selectedId, guardedNavigate, doSelect]);
+
   const exportRegistry = async () => {
     // Build edges in the source→target shape buildRegistry consumes (it reads
     // agent→tool allowlists etc. from edges between component nodes).
@@ -358,19 +457,30 @@ export default function UnifiedModeler() {
   };
 
   const selected = selectedId ? objects[selectedId] : null;
-  // PropertiesPanel expects a React-Flow-style node ({type, data}); adapt.
-  const selectedNode = selected ? { id: selected.id, type: selected.kind, data: selected.data } : null;
-  const updateSelected = (id, patch) =>
-    setObjects((o) => ({ ...o, [id]: { ...o[id], data: { ...o[id].data, ...patch } } }));
 
-  const selectedErrors = useMemo(() => {
-    if (!selected) return null;
-    const v = VALIDATORS[selected.kind];
-    if (!v) return null;
-    const node = { id: selected.id, type: selected.kind, data: selected.data };
-    const m = manifestFor(node, Object.values(objects).map((x) => ({ id: x.id, type: x.kind, data: x.data })), edges);
-    return m && !v(m) ? formatErrors(v.errors) : null;
-  }, [selected, objects, edges]);
+  // Validate the DRAFT (substitute its data into the node list) so the panel's
+  // "Required to be valid" list and the Save-enabled state reflect live edits.
+  const { selectedErrors, draftValid } = useMemo(() => {
+    if (!draftNode) return { selectedErrors: null, draftValid: true };
+    const v = VALIDATORS[draftNode.type];
+    if (!v) return { selectedErrors: null, draftValid: true };
+    const nodes = Object.values(objects).map((x) =>
+      x.id === draftNode.id ? draftNode : { id: x.id, type: x.kind, data: x.data });
+    const m = manifestFor(draftNode, nodes, edges);
+    const ok = m ? v(m) : false;
+    return { selectedErrors: ok ? null : formatErrors(v.errors), draftValid: ok };
+  }, [draftNode, objects, edges]);
+
+  // Commit the draft into the model; clear the new-object flag once valid.
+  const saveDraft = useCallback(() => {
+    if (!draft) return;
+    setObjects((o) => ({ ...o, [draft.id]: { ...o[draft.id], data: draft.data } }));
+    setPendingNew((p) => (p === draft.id ? null : p));
+  }, [draft]);
+  // Revert edits back to the committed data.
+  const revertDraft = useCallback(() => {
+    setDraft((d) => (d && objects[d.id] ? { id: d.id, data: JSON.parse(JSON.stringify(objects[d.id].data)) } : d));
+  }, [objects]);
 
   const issueCount = Object.values(validityById).filter((v) => v === false).length;
 
@@ -409,7 +519,7 @@ export default function UnifiedModeler() {
             <button
               key={it.objId}
               className="atlas-issue-item"
-              onClick={() => { setSelectedId(it.objId); setPanelOpen(true); setFocusReq({ id: it.objId, n: (focusReq?.n || 0) + 1 }); }}
+              onClick={() => selectObject(it.objId, { focus: true })}
               title="Jump to this object"
             >
               <strong>{it.noun} “{it.label}”:</strong> {it.reasons.join('; ')}
@@ -424,14 +534,14 @@ export default function UnifiedModeler() {
           expanded={expanded}
           onToggle={toggleExpand}
           selectedId={selectedId}
-          onSelect={(id) => { setSelectedId(id); setPanelOpen(true); setFocusReq({ id, n: (focusReq?.n || 0) + 1 }); }}
+          onSelect={(id) => selectObject(id, { focus: true })}
           validityById={validityById}
           subjectAreas={subjectAreas}
           currentSA={currentSA}
-          onSelectSA={setCurrentSA}
-          onNewSA={newSubjectArea}
-          onEditSA={editCurrentSA}
-          onCreate={createObject}
+          onSelectSA={(id) => guardedNavigate(() => { setCurrentSA(id); doSelect(null); })}
+          onNewSA={() => guardedNavigate(newSubjectArea)}
+          onEditSA={() => guardedNavigate(editCurrentSA)}
+          onCreate={(kind) => guardedNavigate(() => setCreateKind(kind))}
           collapsed={treeCollapsed}
           onToggleCollapse={() => setTreeCollapsed((c) => !c)}
           onOpenSettings={() => setModal('settings')}
@@ -444,6 +554,8 @@ export default function UnifiedModeler() {
           onDelete={requestDelete}
           hiddenCount={sa ? (sa.hiddenIds || []).length : 0}
           onShowAllInView={showAllInView}
+          onAddChild={(parentId, kind) => guardedNavigate(() => createObject(kind, parentId))}
+          onAddTopLevel={(kind) => guardedNavigate(() => createObject(kind, null))}
         />
         <UnifiedGraph
           objects={canvasObjects}
@@ -451,7 +563,7 @@ export default function UnifiedModeler() {
           expanded={expanded}
           onToggleExpand={toggleExpand}
           selectedId={selectedId}
-          onSelect={(id) => { setSelectedId(id); if (id) setPanelOpen(true); }}
+          onSelect={(id) => selectObject(id)}
           onConnect={connect}
           validityById={validityById}
           focusReq={focusReq}
@@ -461,13 +573,32 @@ export default function UnifiedModeler() {
           viewport={viewports[viewId]}
           onViewportChange={setViewport}
         />
-        {panelOpen && <PropertiesPanel node={selectedNode} onChange={updateSelected} errors={selectedErrors} />}
+        {panelOpen && (
+          <PropertiesPanel
+            node={draftNode}
+            onChange={editDraft}
+            errors={selectedErrors}
+            dirty={draftDirty}
+            canSave={draftDirty && draftValid}
+            onSave={saveDraft}
+            onRevert={() => {
+              if (pendingNew === draft?.id) { // new object → revert = discard it
+                const id = draft.id;
+                setDraft(null); setPendingNew(null); setSelectedId(null);
+                deleteFromModel(id);
+              } else {
+                revertDraft();
+              }
+            }}
+            newObject={pendingNew === draft?.id}
+          />
+        )}
       </div>
 
       {saEditor && (
         <SAEditor
           editor={saEditor}
-          allTasks={allTasks}
+          objects={objects}
           onChange={setSaEditor}
           onSave={() => saveSubjectArea(saEditor)}
           onCancel={() => setSaEditor(null)}
@@ -503,18 +634,154 @@ export default function UnifiedModeler() {
           </div>
         </div>
       )}
+      {navReq && draft && (
+        <div className="atlas-modal-backdrop" onClick={() => setNavReq(null)}>
+          <div className="atlas-modal" onClick={(e) => e.stopPropagation()}>
+            <h2>Unsaved changes</h2>
+            <p className="atlas-empty">
+              “{draft.data?.label || draft.data?.id || draft.id}” has unsaved
+              changes{draftValid ? '' : ' and isn’t valid yet'}. Save them, or discard?
+            </p>
+            <div className="atlas-modal-actions">
+              <button className="atlas-slider-reset" onClick={() => setNavReq(null)}>Cancel</button>
+              <button
+                className="danger"
+                onClick={() => {
+                  const run = navReq.run;
+                  // Brand-new, never-committed object → discard = delete it.
+                  if (pendingNew === draft.id) { deleteFromModel(draft.id); setPendingNew(null); }
+                  setDraft(null);
+                  setNavReq(null);
+                  run && run();
+                }}
+              >
+                Discard changes
+              </button>
+              <button
+                disabled={!draftValid}
+                title={draftValid ? undefined : 'Fill required fields before saving'}
+                onClick={() => {
+                  const run = navReq.run;
+                  saveDraft();
+                  setNavReq(null);
+                  run && run();
+                }}
+              >
+                Save changes
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {createKind && (
+        <CreateObjectModal
+          kind={createKind}
+          objects={objects}
+          currentSA={currentSA}
+          visibleObjects={visibleObjects}
+          onCancel={() => setCreateKind(null)}
+          onCreate={(parentId) => { createObject(createKind, parentId); setCreateKind(null); }}
+        />
+      )}
       {modal === 'settings' && <SettingsModal onClose={() => setModal(null)} />}
       {modal === 'about' && <AboutModal onClose={() => setModal(null)} />}
     </div>
   );
 }
 
-// Modal to name a Subject Area and choose which tasks belong to it.
-function SAEditor({ editor, allTasks, onChange, onSave, onCancel }) {
-  const toggle = (taskId) => {
-    const has = editor.taskIds.includes(taskId);
-    onChange({ ...editor, taskIds: has ? editor.taskIds.filter((t) => t !== taskId) : [...editor.taskIds, taskId] });
+// Modal: choose the parent for a newly-created object. Parents are filtered to
+// kinds that may legally contain this kind (connection rules) AND, inside a
+// Subject Area, to objects visible in that view — so the new child lands where
+// you can see it. Tasks may be created top-level (under the orchestrator).
+function CreateObjectModal({ kind, objects, currentSA, visibleObjects, onCancel, onCreate }) {
+  const allowedParentKinds = useMemo(() => new Set(parentKindsFor(kind)), [kind]);
+  // In an SA, only offer parents that are in the view; in All, any valid parent.
+  const pool = currentSA ? visibleObjects : objects;
+  const candidates = useMemo(
+    () => Object.values(pool)
+      .filter((o) => allowedParentKinds.has(o.kind))
+      .sort((a, b) => (a.data?.label || a.data?.id || a.id).localeCompare(b.data?.label || b.data?.id || b.id)),
+    [pool, allowedParentKinds]
+  );
+  // A task can be top-level (no parent → auto-attaches to the orchestrator).
+  const allowTopLevel = kind === 'task';
+  const [parentId, setParentId] = useState(allowTopLevel ? '' : (candidates[0]?.id || ''));
+  const kindLabel = (CREATABLE_KINDS.find((k) => k.kind === kind)?.label) || kind;
+  const noParents = candidates.length === 0 && !allowTopLevel;
+
+  return (
+    <div className="atlas-modal-backdrop" onClick={onCancel}>
+      <div className="atlas-modal" onClick={(e) => e.stopPropagation()}>
+        <h2>New {kindLabel}</h2>
+        {noParents ? (
+          <p className="atlas-empty">
+            There’s no valid parent for a {kindLabel} {currentSA ? 'in this view' : 'yet'}.
+            {currentSA ? ' Switch to “All”, or add a suitable parent first.' : ` Create a ${[...allowedParentKinds].join(' or ')} first.`}
+          </p>
+        ) : (
+          <div className="atlas-modal-row">
+            <label>Place under</label>
+            <select value={parentId} onChange={(e) => setParentId(e.target.value)}>
+              {allowTopLevel && <option value="">Top level (under the orchestrator)</option>}
+              {candidates.map((o) => (
+                <option key={o.id} value={o.id}>
+                  {(o.data?.label || o.data?.id || o.id)} · {o.kind}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
+        <div className="atlas-modal-actions">
+          <button className="atlas-slider-reset" onClick={onCancel}>Cancel</button>
+          {!noParents && <button onClick={() => onCreate(parentId || null)}>Create</button>}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Modal to name a Subject Area and pick which objects belong to it — the whole
+// model as a checkable tree (Erwin "add to view"). Check any object of any kind;
+// checking a container also auto-checks its subtree (the view expands it anyway,
+// but explicit membership keeps the picker honest). Ancestors are shown for
+// context in the view but need not be checked.
+function SAEditor({ editor, objects, onChange, onSave, onCancel }) {
+  const members = new Set(editor.memberIds || []);
+  const childrenByParent = useMemo(() => {
+    const m = {};
+    for (const o of Object.values(objects)) { if (o.parent) (m[o.parent] ||= []).push(o.id); }
+    return m;
+  }, [objects]);
+  const roots = useMemo(
+    () => Object.values(objects).filter((o) => !o.parent || !objects[o.parent])
+      .map((o) => o.id).sort((a, b) => a.localeCompare(b)),
+    [objects]
+  );
+  const subtree = (id) => { const out = []; const w = (x) => { out.push(x); (childrenByParent[x] || []).forEach(w); }; w(id); return out; };
+  const toggle = (id) => {
+    const ids = subtree(id); // container check toggles its whole subtree
+    const next = new Set(members);
+    const turningOn = !members.has(id);
+    ids.forEach((x) => (turningOn ? next.add(x) : next.delete(x)));
+    onChange({ ...editor, memberIds: [...next] });
   };
+
+  const Row = ({ id, depth }) => {
+    const o = objects[id];
+    if (!o) return null;
+    const kids = (childrenByParent[id] || []).slice().sort((a, b) => a.localeCompare(b));
+    const label = o.data?.label || o.data?.id || o.id;
+    return (
+      <>
+        <label className="atlas-sa-check" style={{ paddingLeft: depth * 16 }}>
+          <input type="checkbox" checked={members.has(id)} onChange={() => toggle(id)} />
+          <span>{label} <span className="atlas-sa-kind">· {o.kind}</span></span>
+        </label>
+        {kids.map((k) => <Row key={k} id={k} depth={depth + 1} />)}
+      </>
+    );
+  };
+
   return (
     <div className="atlas-modal-backdrop" onClick={onCancel}>
       <div className="atlas-modal" onClick={(e) => e.stopPropagation()} autoCapitalize="off" autoCorrect="off" spellCheck={false}>
@@ -525,22 +792,19 @@ function SAEditor({ editor, allTasks, onChange, onSave, onCancel }) {
             className="atlas-sa-name"
             value={editor.name}
             onChange={(e) => onChange({ ...editor, name: e.target.value })}
-            placeholder="MS SQL → Aurora migration"
+            placeholder="Gateway & Ingestion"
           />
         </div>
         <div className="atlas-modal-row">
-          <label>Tasks in this view</label>
-          {allTasks.length === 0 && <div className="atlas-empty">No tasks in the model yet.</div>}
-          {allTasks.map((t) => (
-            <label key={t.id} className="atlas-sa-check">
-              <input type="checkbox" checked={editor.taskIds.includes(t.id)} onChange={() => toggle(t.id)} />
-              <span>{t.data?.label || t.data?.id || t.id}</span>
-            </label>
-          ))}
+          <label>Objects in this view <span className="atlas-sa-kind">(check to include; checking a container includes its children)</span></label>
+          <div className="atlas-sa-tree">
+            {roots.length === 0 && <div className="atlas-empty">The model is empty.</div>}
+            {roots.map((r) => <Row key={r} id={r} depth={0} />)}
+          </div>
         </div>
         <div className="atlas-modal-actions">
           <button className="atlas-slider-reset" onClick={onCancel}>Cancel</button>
-          <button onClick={onSave} disabled={!editor.name}>Save</button>
+          <button onClick={onSave} disabled={!editor.name || (editor.memberIds || []).length === 0}>Save</button>
         </div>
       </div>
     </div>

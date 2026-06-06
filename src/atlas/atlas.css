@@ -124,10 +124,12 @@
 .atlas-sa-showall:hover { color: var(--agent); }
 .atlas-sa-name { background: var(--bg-input); color: var(--text); border: 1px solid var(--border); border-radius: 5px; padding: 0.4rem 0.5rem; font-size: 0.9rem; width: 100%; }
 .atlas-sa-check { display: flex; align-items: center; gap: 0.5rem; padding: 0.25rem 0; font-size: 0.9rem; cursor: pointer; }
-.atlas-sa-check input { accent-color: var(--accent); }
+.atlas-sa-check input { accent-color: var(--accent); flex-shrink: 0; }
+.atlas-sa-kind { color: var(--text-muted); font-size: 0.82rem; font-weight: 400; }
+.atlas-sa-tree { max-height: 320px; overflow-y: auto; border: 1px solid var(--border); border-radius: 6px; padding: 6px 8px; margin-top: 4px; }
 
 /* footer pins to the bottom of the palette */
-.atlas-palette-spacer { flex: 1; }
+.atlas-palette-spacer { flex: 0 0 auto; }
 .atlas-palette-footer { border-top: 1px solid var(--border-soft); padding: 0.25rem 0; }
 .atlas-footer-item {
   display: flex; align-items: center; gap: 0.5rem; width: 100%; text-align: left;
@@ -193,7 +195,19 @@
   background: var(--bg-panel);
 }
 .atlas-panel.empty { color: var(--text-muted); font-size: 0.95rem; }
-.atlas-panel h3 { margin: 0 0 0.75rem; color: var(--accent); font-size: 1.1rem; }
+.atlas-panel h3 { margin: 0; color: var(--accent); font-size: 1.1rem; }
+.atlas-panel-bar {
+  display: flex; align-items: center; justify-content: space-between; gap: 0.5rem;
+  margin-bottom: 0.75rem; position: sticky; top: 0; background: var(--bg); padding-bottom: 0.4rem; z-index: 2;
+}
+.atlas-panel-actions { display: flex; gap: 0.4rem; }
+.atlas-panel-actions button {
+  border: 1px solid var(--border); border-radius: 5px; padding: 0.3rem 0.7rem;
+  font-size: 0.85rem; font-weight: 600; cursor: pointer; background: var(--bg-elevated); color: var(--text);
+}
+.atlas-panel-actions .atlas-save { background: var(--accent); color: var(--accent-fg); border-color: var(--accent); }
+.atlas-panel-actions button:disabled { opacity: 0.45; cursor: default; }
+.atlas-dirty-dot { color: #e0b35c; }
 
 .atlas-field { display: flex; flex-direction: column; margin-bottom: 0.75rem; }
 .atlas-field-label { font-size: 0.85rem; font-weight: 600; color: var(--text); margin-bottom: 0.2rem; }
@@ -295,6 +309,14 @@
 .atlas-ctx-item.danger { color: #e9706b; }
 .atlas-ctx-item.danger:hover:not(:disabled) { background: #d9534f; color: #fff; }
 .atlas-ctx-sep { height: 1px; background: var(--border); margin: 4px 2px; }
+/* "Add child ▸" submenu — flies out to the right on hover. */
+.atlas-ctx-sub { position: relative; }
+.atlas-ctx-item.has-sub { display: flex; justify-content: space-between; }
+.atlas-ctx-submenu {
+  position: absolute; left: 100%; top: -4px; min-width: 160px;
+  background: var(--bg-elevated); border: 1px solid var(--border);
+  border-radius: 8px; padding: 4px; box-shadow: 0 8px 28px rgba(0, 0, 0, 0.45);
+}
 
 /* ── Orchestrator: singular palette entry + dedicated control-flow view ── */
 .atlas-item.atlas-singular {
@@ -383,7 +405,9 @@
 }
 .atlas-create-menu button:hover { background: var(--accent); color: var(--accent-fg); }
 
-.atlas-tree { padding: 4px 0; overflow-y: auto; }
+/* flex:1 so the tree fills the panel — the empty area below the last row is
+   then right-clickable for "Add Task" (the spacer used to eat that space). */
+.atlas-tree { padding: 4px 0; overflow-y: auto; flex: 1 1 auto; min-height: 60px; }
 .atlas-tree-row {
   display: flex; align-items: center; gap: 6px; padding: 4px 8px; cursor: pointer;
   font-size: 0.88rem; color: var(--text); white-space: nowrap; overflow: hidden;

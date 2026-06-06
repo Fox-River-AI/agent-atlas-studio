@@ -198,18 +198,22 @@ function UnifiedGraphInner({
 
   const handleConnect = useCallback((params) => onConnect?.(params), [onConnect]);
 
-  // Bring a focused node into view ONLY if it's off-screen, and WITHOUT changing
-  // zoom — selecting a node in the tree should reveal it, not zoom the canvas to
-  // it. (A just-created node, or one already visible, leaves the framing alone.)
+  // Focus a node. Two modes:
+  //  • focusReq.zoom (explicit "Go to object"): centre AND zoom in on it.
+  //  • otherwise (tree click / new object): reveal it only if off-screen, and
+  //    never change the current zoom (a plain click shouldn't re-frame).
   useEffect(() => {
     if (!focusReq?.id) return;
     const p = positioned.find((n) => n.id === focusReq.id);
     if (!p) return;
     const t = setTimeout(() => {
       try {
-        const zoom = rf.getZoom?.() || 1;
-        // Node center in flow coords → screen coords; pan only if outside the pane.
         const cx = p.x + 95, cy = p.y + 30;
+        if (focusReq.zoom) {
+          rf.setCenter(cx, cy, { zoom: 1.4, duration: 400 });
+          return;
+        }
+        const zoom = rf.getZoom?.() || 1;
         const screen = rf.flowToScreenPosition?.({ x: cx, y: cy });
         const pane = paneRef.current?.getBoundingClientRect?.();
         const visible = screen && pane &&
