@@ -105,12 +105,12 @@ export default function PropertiesPanel({ node, onChange, errors, idError, dirty
             </Field>
           </fieldset>
 
-          <Field label="refusal conditions" hint="one per line; refusal is a first-class output">
+          <Field label="refusal conditions" hint="When should this agent DECLINE rather than guess? One situation per line (at least one required). Each line is a condition that makes the agent emit its refusal value instead of an answer.">
             <textarea
               value={(d.refusalConditions || []).join('\n')}
               onChange={(e) => set({ refusalConditions: e.target.value.split('\n') })}
               rows={3}
-              placeholder={'The message is empty.\nThe request is outside support triage.'}
+              placeholder={'Required clinical inputs are missing or ungrounded\nThe note contains no codable diagnosis\nEvidence does not meet the documentation threshold for the queried condition'}
             />
           </Field>
           <Field label="refusal emits" hint="the output value that signals a refusal">
