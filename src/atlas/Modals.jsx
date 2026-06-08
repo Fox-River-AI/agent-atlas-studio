@@ -62,7 +62,10 @@ export function SettingsModal({ onClose }) {
 export function AboutModal({ onClose }) {
   return (
     <Backdrop onClose={onClose}>
-      <h2>Agent Atlas Studio</h2>
+      <div className="atlas-about-head">
+        <img className="atlas-about-logo" src={`${import.meta.env.BASE_URL}agent-atlas-logo.svg`} alt="" aria-hidden="true" />
+        <h2>Agent Atlas Studio</h2>
+      </div>
       <p>
         A visual modeler for agentic AI systems. Design your agents, tools, and
         the registry that governs them; validate it live against the open{' '}

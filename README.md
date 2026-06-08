@@ -1,4 +1,6 @@
-# agent-atlas-studio
+<p align="center"><img src="docs/agent-atlas-logo.svg" alt="Agent Atlas" height="120" /></p>
+
+<h1 align="center">Agent Atlas</h1>
 
 **Model your agentic AI platform like the system it actually is — then generate it, and (soon) prove the running system matches.**
 
