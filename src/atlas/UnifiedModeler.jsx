@@ -487,7 +487,10 @@ export default function UnifiedModeler() {
   return (
     <div className="atlas-page">
       <div className="atlas-toolbar">
-        <h1>Agent Atlas</h1>
+        <div className="atlas-brand">
+          <img className="atlas-logo" src={`${import.meta.env.BASE_URL}agent-atlas-logo.svg`} alt="" aria-hidden="true" />
+          <h1>Agent Atlas</h1>
+        </div>
         <div className="atlas-actions">
           {allValid ? (
             <span className="atlas-status ok">✓ registry valid</span>

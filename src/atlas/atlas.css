@@ -20,6 +20,10 @@
   border-bottom: 1px solid var(--border);
 }
 .atlas-toolbar h1 { font-size: 1.25rem; margin: 0; color: var(--accent); }
+.atlas-brand { display: flex; align-items: center; gap: 0.6rem; }
+.atlas-logo { height: 28px; width: auto; display: block; }
+.atlas-about-head { display: flex; align-items: center; gap: 0.75rem; margin-bottom: 0.25rem; }
+.atlas-about-logo { height: 44px; width: auto; display: block; }
 .atlas-actions { display: flex; align-items: center; gap: 0.6rem; }
 .atlas-actions button {
   background: var(--bg-elevated);
