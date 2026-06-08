@@ -10,7 +10,7 @@ import PropertiesPanel from './PropertiesPanel';
 import ModelTree from './ModelTree';
 import { SettingsModal, AboutModal } from './Modals';
 import { VALIDATORS, formatErrors, DEFAULT_MODEL } from './schema';
-import { manifestFor, buildRegistry } from './model';
+import { manifestFor, buildRegistry, crossChecks } from './model';
 import { blankData, CREATABLE_KINDS } from './blankData';
 import { canConnect, connectionReason, parentKindsFor } from './relationships';
 import { namedIssues } from './validationMessages';
@@ -40,6 +40,7 @@ export default function UnifiedModeler() {
   // Delete confirm: { id, label, kind, childCount, childNames } — only in "All".
   const [deleteReq, setDeleteReq] = useState(null);
   const [deleteAck, setDeleteAck] = useState(false); // checkbox must be ticked to delete
+  const [idAlert, setIdAlert] = useState(null); // duplicate-id pop-up message
   // Undo stack of recent deletions (newest last). Each entry is a snapshot of
   // what was removed, so Undo can be pressed repeatedly to walk back deletions.
   const [undoStack, setUndoStack] = useState([]);
@@ -474,8 +475,20 @@ export default function UnifiedModeler() {
     return { validityById: valid, problemsByObj: problems };
   }, [objects, edges]);
 
-  const allValid = useMemo(() => Object.values(validityById).every(Boolean), [validityById]);
-  const issues = useMemo(() => namedIssues(problemsByObj, objects), [problemsByObj, objects]);
+  // Cross-manifest checks (e.g. duplicate ids) that per-object schema validation
+  // can't catch. Duplicate data.id collides as a manifest filename AND breaks the
+  // conformance join key, so it must block a clean/exportable model. (asNodes is
+  // computed above from the committed objects.)
+  const crossIssues = useMemo(() => crossChecks(asNodes), [asNodes]);
+  const allValid = useMemo(
+    () => Object.values(validityById).every(Boolean) && crossIssues.length === 0,
+    [validityById, crossIssues]
+  );
+  const issues = useMemo(() => {
+    const named = namedIssues(problemsByObj, objects);
+    const cross = crossIssues.map((msg, i) => ({ objId: `cross-${i}`, noun: 'Model', label: 'cross-check', reasons: [msg] }));
+    return [...cross, ...named];
+  }, [problemsByObj, objects, crossIssues]);
   const [showIssues, setShowIssues] = useState(false);
 
   // Run a navigation, but if the current draft is dirty, defer it behind the
@@ -564,15 +577,28 @@ export default function UnifiedModeler() {
 
   // Validate the DRAFT (substitute its data into the node list) so the panel's
   // "Required to be valid" list and the Save-enabled state reflect live edits.
-  const { selectedErrors, draftValid } = useMemo(() => {
-    if (!draftNode) return { selectedErrors: null, draftValid: true };
+  const { selectedErrors, draftValid, idError } = useMemo(() => {
+    if (!draftNode) return { selectedErrors: null, draftValid: true, idError: null };
+    const errs = [];
+    // PREVENT duplicate ids at the source: the draft's data.id must be unique
+    // across every OTHER object (id is the locked join key + manifest filename).
+    // This gates Save, so a duplicate can never be committed in the first place.
+    const myId = (draftNode.data?.id || '').trim();
+    let dupErr = null;
+    if (myId) {
+      const clash = Object.values(objects).some(
+        (o) => o.id !== draftNode.id && (o.data?.id || '').trim() === myId);
+      if (clash) dupErr = `The id “${myId}” is already used by another object. Ids must be unique.`;
+    }
+    if (dupErr) errs.push(dupErr);
     const v = VALIDATORS[draftNode.type];
-    if (!v) return { selectedErrors: null, draftValid: true };
-    const nodes = Object.values(objects).map((x) =>
-      x.id === draftNode.id ? draftNode : { id: x.id, type: x.kind, data: x.data });
-    const m = manifestFor(draftNode, nodes, edges);
-    const ok = m ? v(m) : false;
-    return { selectedErrors: ok ? null : formatErrors(v.errors), draftValid: ok };
+    if (v) {
+      const nodes = Object.values(objects).map((x) =>
+        x.id === draftNode.id ? draftNode : { id: x.id, type: x.kind, data: x.data });
+      const m = manifestFor(draftNode, nodes, edges);
+      if (!(m && v(m))) errs.push(...formatErrors(v.errors));
+    }
+    return { selectedErrors: errs.length ? errs : null, draftValid: errs.length === 0, idError: dupErr };
   }, [draftNode, objects, edges]);
 
   // Commit the draft into the model; clear the new-object flag once valid.
@@ -586,7 +612,10 @@ export default function UnifiedModeler() {
     setDraft((d) => (d && objects[d.id] ? { id: d.id, data: JSON.parse(JSON.stringify(objects[d.id].data)) } : d));
   }, [objects]);
 
-  const issueCount = Object.values(validityById).filter((v) => v === false).length;
+  // Count per-object schema failures PLUS cross-manifest issues (duplicate ids),
+  // so the "✗ N issue(s)" badge reflects everything that blocks a valid model —
+  // otherwise a duplicate-id model showed "✗ 0 issue(s)" with export disabled.
+  const issueCount = Object.values(validityById).filter((v) => v === false).length + crossIssues.length;
 
   return (
     <div className="atlas-page">
@@ -679,8 +708,8 @@ export default function UnifiedModeler() {
             <button
               key={it.objId}
               className="atlas-issue-item"
-              onClick={() => selectObject(it.objId, { focus: true })}
-              title="Jump to this object"
+              onClick={() => { if (objects[it.objId]) selectObject(it.objId, { focus: true }); }}
+              title={objects[it.objId] ? 'Jump to this object' : undefined}
             >
               <strong>{it.noun} “{it.label}”:</strong> {it.reasons.join('; ')}
             </button>
@@ -738,9 +767,10 @@ export default function UnifiedModeler() {
             node={draftNode}
             onChange={editDraft}
             errors={selectedErrors}
+            idError={idError}
             dirty={draftDirty}
             canSave={draftDirty && draftValid}
-            onSave={saveDraft}
+            onSave={() => { if (idError) { setIdAlert(idError); } else { saveDraft(); } }}
             onRevert={() => {
               if (pendingNew === draft?.id) { // new object → revert = discard it
                 const id = draft.id;
@@ -755,6 +785,18 @@ export default function UnifiedModeler() {
         )}
       </div>
 
+      {idAlert && (
+        <div className="atlas-modal-backdrop" onClick={() => setIdAlert(null)}>
+          <div className="atlas-modal" onClick={(e) => e.stopPropagation()}>
+            <h2>Duplicate id</h2>
+            <p className="atlas-empty">{idAlert}</p>
+            <p className="atlas-empty">Choose a unique id for this object before saving. (Each object's id is its manifest filename and its identity for monitoring/conformance, so no two objects can share one.)</p>
+            <div className="atlas-modal-actions">
+              <button onClick={() => setIdAlert(null)}>OK</button>
+            </div>
+          </div>
+        </div>
+      )}
       {saEditor && (
         <SAEditor
           editor={saEditor}

@@ -241,6 +241,9 @@
   font-family: inherit;
 }
 .atlas-field input:focus, .atlas-field textarea:focus, .atlas-field select:focus { outline: none; border-color: var(--accent); }
+.atlas-field input:disabled { opacity: 0.6; cursor: not-allowed; background: var(--bg-elevated); }
+.atlas-field input.atlas-input-error { border-color: #d9534f; }
+.atlas-field-error { color: #e9706b; font-size: 0.8rem; margin-top: 0.25rem; }
 
 .atlas-group { border: 1px solid var(--border); border-radius: 6px; padding: 0.5rem 0.65rem; margin-bottom: 0.75rem; }
 .atlas-group legend { font-size: 0.85rem; color: var(--accent); padding: 0 0.25rem; }
