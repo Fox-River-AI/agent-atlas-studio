@@ -16,7 +16,7 @@ import { canConnect, connectionReason, parentKindsFor } from './relationships';
 import { namedIssues } from './validationMessages';
 import './atlas.css';
 import { SEED_OBJECTS, SEED_EDGES, SEED_EXPANDED, SEED_SUBJECT_AREAS } from './seedModel';
-import { loadModel, saveModel, clearModel } from './persistence';
+import { loadModel, saveModel, clearModel, saveRecovery, loadRecovery, clearRecovery } from './persistence';
 
 export default function UnifiedModeler() {
   // Render the demo seed first; if a saved model exists on disk it's loaded
@@ -37,8 +37,14 @@ export default function UnifiedModeler() {
   const [currentSA, setCurrentSA] = useState(null);
   const [saEditor, setSaEditor] = useState(null); // { id, name, memberIds } being edited
   const [exportMsg, setExportMsg] = useState('');
-  // Delete confirm: { id, label, kind } — only reachable in "All".
+  // Delete confirm: { id, label, kind, childCount, childNames } — only in "All".
   const [deleteReq, setDeleteReq] = useState(null);
+  const [deleteAck, setDeleteAck] = useState(false); // checkbox must be ticked to delete
+  // Undo stack of recent deletions (newest last). Each entry is a snapshot of
+  // what was removed, so Undo can be pressed repeatedly to walk back deletions.
+  const [undoStack, setUndoStack] = useState([]);
+  // Crash-recovery restore prompt: a recovered draft from a previous unclean exit.
+  const [recoveryReq, setRecoveryReq] = useState(null); // { draft, selectedId, pendingNew } or null
   // Create flow: the chosen kind, awaiting a parent pick. null = closed.
   const [createKind, setCreateKind] = useState(null);
   // A just-created object that has never been committed — discarding it deletes
@@ -85,14 +91,32 @@ export default function UnifiedModeler() {
             || { id: 'orchestrator', kind: 'orchestrator', parent: null, data: blankData('orchestrator') };
           objs = { ...objs, [orch.id]: orch };
         }
+        // Self-heal: drop any edge / SA member / SA hidden ref that points at an
+        // object that no longer exists (defends against a half-pruned save).
+        const exists = (x) => !!objs[x];
+        const cleanEdges = (saved.edges || []).filter((e) => exists(e.source) && exists(e.target));
+        const cleanSAs = (saved.subjectAreas || []).map((s) => ({
+          ...s,
+          memberIds: (s.memberIds || []).filter(exists),
+          hiddenIds: (s.hiddenIds || []).filter(exists),
+        }));
         setObjects(objs);
-        setEdges(saved.edges);
+        setEdges(cleanEdges);
         setExpanded(saved.expanded);
-        setSubjectAreas(saved.subjectAreas);
+        setSubjectAreas(cleanSAs);
         setLayouts(saved.layouts);
         setViewports(saved.viewports);
       }
       if (!cancelled) hydrated.current = true;
+      // Crash recovery: if a recovery snapshot holds an uncommitted draft from a
+      // previous unclean exit, offer to restore it. (A clean exit leaves draft
+      // null, so nothing is offered.)
+      try {
+        const rec = await loadRecovery();
+        if (!cancelled && rec && rec.draft && rec.draft.id) {
+          setRecoveryReq({ draft: rec.draft, selectedId: rec.selectedId, pendingNew: rec.pendingNew });
+        }
+      } catch { /* ignore */ }
     })();
     return () => { cancelled = true; };
   }, []);
@@ -119,6 +143,29 @@ export default function UnifiedModeler() {
     }, 400);
     return () => { if (saveTimer.current) clearTimeout(saveTimer.current); };
   }, [objects, edges, expanded, subjectAreas, layouts, viewports]);
+
+  // CRASH RECOVERY (requirement #3): write a recovery snapshot on every change,
+  // INCLUDING the in-progress draft + selection that the committed model file
+  // doesn't hold. On a clean exit the model file is current and the recovery's
+  // draft is null, so there's nothing unsaved to restore. If the app dies
+  // mid-edit, the recovery still holds the uncommitted draft → we offer it on
+  // next launch (see the restore prompt). Written via requestRecoveryWrite.
+  const recoveryTimer = useRef(null);
+  useEffect(() => {
+    if (!hydrated.current) return;
+    if (recoveryTimer.current) clearTimeout(recoveryTimer.current);
+    recoveryTimer.current = setTimeout(() => {
+      saveRecovery({
+        savedAt: Date.now(),
+        model: { objects, edges, expanded, subjectAreas, layouts, viewports },
+        // include the kind so a brand-new uncommitted object can be rebuilt
+        draft: draft ? { ...draft, kind: objects[draft.id]?.kind } : null,
+        selectedId,
+        pendingNew,
+      });
+    }, 700);
+    return () => { if (recoveryTimer.current) clearTimeout(recoveryTimer.current); };
+  }, [objects, edges, expanded, subjectAreas, layouts, viewports, draft, selectedId, pendingNew]);
 
   // Escape hatch: wipe the saved model and reload to the pristine demo seed
   // (for screenshots / talks). Without this, persistence would trap the user in
@@ -227,28 +274,74 @@ export default function UnifiedModeler() {
 
   // Delete an object (and its subtree) from the whole model.
   const deleteFromModel = useCallback((id) => {
-    setObjects((objs) => {
-      if (!objs[id] || objs[id].kind === 'orchestrator') return objs;
-      const doomed = new Set(descendantsOf(id, objs));
-      const next = Object.fromEntries(Object.entries(objs).filter(([k]) => !doomed.has(k)));
-      // Prune edges and SA membership/hidden refs that pointed at removed objects.
-      setEdges((es) => es.filter((e) => !doomed.has(e.source) && !doomed.has(e.target)));
-      setSubjectAreas((sas) => sas.map((s) => ({
-        ...s,
-        memberIds: (s.memberIds || []).filter((m) => !doomed.has(m)),
-        hiddenIds: (s.hiddenIds || []).filter((h) => !doomed.has(h)),
-      })));
-      setLayouts((L) => {
-        const cleaned = {};
-        for (const [v, m] of Object.entries(L)) {
-          cleaned[v] = Object.fromEntries(Object.entries(m).filter(([oid]) => !doomed.has(oid)));
-        }
-        return cleaned;
-      });
-      return next;
+    if (!objects[id] || objects[id].kind === 'orchestrator') return;
+    const doomed = new Set(descendantsOf(id, objects));
+    // SNAPSHOT what we're about to remove, so Undo can restore it exactly.
+    const snapshot = {
+      objects: Object.fromEntries(Object.entries(objects).filter(([k]) => doomed.has(k))),
+      edges: edges.filter((e) => doomed.has(e.source) || doomed.has(e.target)),
+      saRefs: subjectAreas.map((s) => ({
+        id: s.id,
+        memberIds: (s.memberIds || []).filter((m) => doomed.has(m)),
+        hiddenIds: (s.hiddenIds || []).filter((h) => doomed.has(h)),
+      })).filter((r) => r.memberIds.length || r.hiddenIds.length),
+      layouts: Object.fromEntries(Object.entries(layouts).map(([v, m]) =>
+        [v, Object.fromEntries(Object.entries(m).filter(([oid]) => doomed.has(oid)))])),
+      label: objects[id].data?.label || objects[id].data?.id || id,
+      count: doomed.size,
+    };
+    setUndoStack((stk) => [...stk, snapshot].slice(-25)); // cap history at 25
+    // Compute the doomed set ONCE up front, then call each setter at the top
+    // level. (Calling other setters INSIDE the setObjects updater is a React
+    // anti-pattern — under Strict Mode the updater runs twice, which corrupted
+    // state and blanked the screen when deleting many objects.)
+    setObjects((objs) => Object.fromEntries(Object.entries(objs).filter(([k]) => !doomed.has(k))));
+    setEdges((es) => es.filter((e) => !doomed.has(e.source) && !doomed.has(e.target)));
+    setSubjectAreas((sas) => sas.map((s) => ({
+      ...s,
+      memberIds: (s.memberIds || []).filter((m) => !doomed.has(m)),
+      hiddenIds: (s.hiddenIds || []).filter((h) => !doomed.has(h)),
+    })));
+    setLayouts((L) => {
+      const cleaned = {};
+      for (const [v, m] of Object.entries(L)) {
+        cleaned[v] = Object.fromEntries(Object.entries(m).filter(([oid]) => !doomed.has(oid)));
+      }
+      return cleaned;
     });
-    setSelectedId((cur) => (cur === id ? null : cur));
-  }, [descendantsOf]);
+    setSelectedId((cur) => (doomed.has(cur) ? null : cur));
+    setDraft((d) => (d && doomed.has(d.id) ? null : d));
+    setPendingNew((p) => (doomed.has(p) ? null : p));
+  }, [objects, edges, subjectAreas, layouts, descendantsOf]);
+
+  // Undo the most recent deletion (pop the stack). Repeatable — press again to
+  // walk back further. Restores the exact subtree, edges, SA refs, and layout.
+  const undoDelete = useCallback(() => {
+    setUndoStack((stk) => {
+      if (stk.length === 0) return stk;
+      const snap = stk[stk.length - 1];
+      setObjects((o) => ({ ...o, ...snap.objects }));
+      setEdges((es) => {
+        const have = new Set(es.map((e) => e.id));
+        return [...es, ...snap.edges.filter((e) => !have.has(e.id))];
+      });
+      setSubjectAreas((sas) => sas.map((s) => {
+        const r = snap.saRefs.find((x) => x.id === s.id);
+        if (!r) return s;
+        return {
+          ...s,
+          memberIds: [...new Set([...(s.memberIds || []), ...r.memberIds])],
+          hiddenIds: [...new Set([...(s.hiddenIds || []), ...r.hiddenIds])],
+        };
+      }));
+      setLayouts((L) => {
+        const next = { ...L };
+        for (const [v, m] of Object.entries(snap.layouts)) next[v] = { ...(next[v] || {}), ...m };
+        return next;
+      });
+      return stk.slice(0, -1);
+    });
+  }, []);
 
   // Toggle hide/show for a SINGLE object in the CURRENT view (Erwin "remove from
   // / add to diagram"). Per-OBJECT — clicking a tool hides only that tool (and
@@ -282,8 +375,19 @@ export default function UnifiedModeler() {
     if (currentSA) return; // safety: no deleting from inside a Subject Area
     const o = objects[id];
     if (!o || o.kind === 'orchestrator') return;
-    setDeleteReq({ id, label: o.data?.label || o.data?.id || o.id, kind: o.kind });
-  }, [objects, currentSA]);
+    // Cascade preview: everything that will be destroyed (the subtree).
+    const ids = descendantsOf(id, objects);
+    const childIds = ids.filter((x) => x !== id);
+    const childNames = childIds.map((x) => objects[x]?.data?.label || objects[x]?.data?.id || x);
+    setDeleteAck(false); // require a fresh acknowledgment each time
+    setDeleteReq({
+      id,
+      label: o.data?.label || o.data?.id || o.id,
+      kind: o.kind,
+      childCount: childIds.length,
+      childNames,
+    });
+  }, [objects, currentSA, descendantsOf]);
 
   // The unified objects, in the {id,type,data} node shape buildRegistry/manifestFor expect.
   const asNodes = useMemo(
@@ -515,6 +619,59 @@ export default function UnifiedModeler() {
 
       {connectMsg && <div className="atlas-cross-issues">{connectMsg}</div>}
       {exportMsg && <div className="atlas-export-msg">{exportMsg}</div>}
+      {recoveryReq && (
+        <div className="atlas-modal-backdrop">
+          <div className="atlas-modal" onClick={(e) => e.stopPropagation()}>
+            <h2>Restore unsaved work?</h2>
+            <p className="atlas-empty">
+              The app closed with unsaved edits to
+              “{recoveryReq.draft.data?.label || recoveryReq.draft.data?.id || recoveryReq.draft.id}”.
+              Restore those edits, or discard them and use the last saved model?
+            </p>
+            <div className="atlas-modal-actions">
+              <button
+                className="atlas-slider-reset"
+                onClick={() => { clearRecovery(); setRecoveryReq(null); }}
+              >
+                Discard
+              </button>
+              <button
+                onClick={() => {
+                  const r = recoveryReq;
+                  const kind = objects[r.draft.id]?.kind || r.draft.kind;
+                  // A brand-new object was never committed to the model — re-insert
+                  // a shell so the draft has something to attach to.
+                  if (!objects[r.draft.id] && r.pendingNew === r.draft.id) {
+                    setObjects((o) => ({ ...o, [r.draft.id]: { id: r.draft.id, kind: kind || 'agent', parent: null, data: r.draft.data } }));
+                  }
+                  if (objects[r.draft.id] || r.pendingNew === r.draft.id) {
+                    setDraft(r.draft);
+                    setSelectedId(r.draft.id);
+                    setPanelOpen(true);
+                    if (r.pendingNew) setPendingNew(r.pendingNew);
+                  }
+                  setRecoveryReq(null);
+                }}
+              >
+                Restore edits
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {undoStack.length > 0 && (() => {
+        const last = undoStack[undoStack.length - 1];
+        return (
+          <div className="atlas-undo-bar">
+            <span>
+              Deleted “{last.label}” ({last.count} object{last.count === 1 ? '' : 's'}).
+              {undoStack.length > 1 && ` ${undoStack.length} deletions undoable.`}
+            </span>
+            <button onClick={undoDelete}>Undo</button>
+            <button className="atlas-undo-dismiss" onClick={() => setUndoStack([])}>Dismiss</button>
+          </div>
+        );
+      })()}
 
       {showIssues && issues.length > 0 && (
         <div className="atlas-issues-bar">
@@ -626,43 +783,81 @@ export default function UnifiedModeler() {
         <div className="atlas-modal-backdrop" onClick={() => setDeleteReq(null)}>
           <div className="atlas-modal" onClick={(e) => e.stopPropagation()}>
             <h2>Delete “{deleteReq.label}”?</h2>
-            <p className="atlas-empty">
-              This deletes the {deleteReq.kind} from the model, including
-              everything nested under it and its relationships. This can’t be undone.
-            </p>
+            {deleteReq.childCount > 0 ? (
+              <>
+                <p className="atlas-empty">
+                  This deletes the {deleteReq.kind} <strong>and its {deleteReq.childCount} nested
+                  object{deleteReq.childCount === 1 ? '' : 's'}</strong> from the model, along with
+                  their relationships:
+                </p>
+                <div className="atlas-delete-list">
+                  {deleteReq.childNames.slice(0, 12).map((n, i) => <div key={i}>• {n}</div>)}
+                  {deleteReq.childNames.length > 12 && <div>…and {deleteReq.childNames.length - 12} more</div>}
+                </div>
+                <p className="atlas-empty">You can Undo immediately after.</p>
+              </>
+            ) : (
+              <p className="atlas-empty">
+                This deletes the {deleteReq.kind} from the model and its relationships.
+                You can Undo immediately after.
+              </p>
+            )}
+            <label className="atlas-sa-check atlas-delete-ack">
+              <input type="checkbox" checked={deleteAck} onChange={(e) => setDeleteAck(e.target.checked)} />
+              <span>Yes, permanently delete {deleteReq.childCount > 0 ? `these ${deleteReq.childCount + 1} objects` : 'this object'}.</span>
+            </label>
             <div className="atlas-modal-actions">
               <button className="atlas-slider-reset" onClick={() => setDeleteReq(null)}>Cancel</button>
-              <button className="danger" onClick={() => { deleteFromModel(deleteReq.id); setDeleteReq(null); }}>Delete from model</button>
+              <button
+                className="danger"
+                disabled={!deleteAck}
+                title={deleteAck ? undefined : 'Tick the box to confirm'}
+                onClick={() => { deleteFromModel(deleteReq.id); setDeleteReq(null); setDeleteAck(false); }}
+              >
+                Delete {deleteReq.childCount > 0 ? `${deleteReq.childCount + 1} objects` : 'object'}
+              </button>
             </div>
           </div>
         </div>
       )}
-      {navReq && draft && (
-        <div className="atlas-modal-backdrop" onClick={() => setNavReq(null)}>
+      {navReq && draft && (() => {
+        const isNew = pendingNew === draft.id;
+        return (
+        // For a brand-new object we DON'T let a backdrop click dismiss silently —
+        // the user must explicitly Complete it or Discard it (requirement #2:
+        // no half-made objects left lying around). Editing an existing object can
+        // be cancelled (returns you to keep editing).
+        <div className="atlas-modal-backdrop" onClick={() => { if (!isNew) setNavReq(null); }}>
           <div className="atlas-modal" onClick={(e) => e.stopPropagation()}>
-            <h2>Unsaved changes</h2>
+            <h2>{isNew ? `Finish this ${draft && objects[draft.id] ? objects[draft.id].kind : 'object'}?` : 'Unsaved changes'}</h2>
             <p className="atlas-empty">
-              “{draft.data?.label || draft.data?.id || draft.id}” has unsaved
-              changes{draftValid ? '' : ' and isn’t valid yet'}. Save them, or discard?
+              {isNew ? (
+                <>This new object {draftValid ? 'is ready to save' : 'is missing required fields'}.
+                Complete its required fields to keep it, or discard it.</>
+              ) : (
+                <>“{draft.data?.label || draft.data?.id || draft.id}” has unsaved
+                changes{draftValid ? '' : ' and isn’t valid yet'}. Save them, or discard?</>
+              )}
             </p>
             <div className="atlas-modal-actions">
-              <button className="atlas-slider-reset" onClick={() => setNavReq(null)}>Cancel</button>
+              <button className="atlas-slider-reset" onClick={() => setNavReq(null)}>
+                {isNew ? 'Keep editing' : 'Cancel'}
+              </button>
               <button
                 className="danger"
                 onClick={() => {
                   const run = navReq.run;
-                  // Brand-new, never-committed object → discard = delete it.
-                  if (pendingNew === draft.id) { deleteFromModel(draft.id); setPendingNew(null); }
+                  if (isNew) { deleteFromModel(draft.id); setPendingNew(null); }
                   setDraft(null);
                   setNavReq(null);
                   run && run();
                 }}
               >
-                Discard changes
+                Discard
               </button>
               <button
                 disabled={!draftValid}
-                title={draftValid ? undefined : 'Fill required fields before saving'}
+                title={draftValid ? undefined : 'Fill required fields first'}
                 onClick={() => {
                   const run = navReq.run;
                   saveDraft();
@@ -670,12 +865,13 @@ export default function UnifiedModeler() {
                   run && run();
                 }}
               >
-                Save changes
+                {isNew ? 'Save & keep' : 'Save changes'}
               </button>
             </div>
           </div>
         </div>
-      )}
+        );
+      })()}
       {createKind && (
         <CreateObjectModal
           kind={createKind}

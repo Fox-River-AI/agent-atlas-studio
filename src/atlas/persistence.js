@@ -13,10 +13,12 @@
 // first run. A "Reset to demo" action clears the store so the seed loads again.
 
 const KEY = 'agent-atlas:model:v1';
+const RECOVERY_KEY = 'agent-atlas:recovery:v1';
 // Write into a subdir (not the AppData root) so a recursive mkdir of the subdir
 // also creates the app's AppData base folder — which Tauri does NOT auto-create.
 const DIR = 'state';
 const FILE = 'state/model.json';
+const RECOVERY_FILE = 'state/recovery.json';
 const VERSION = 1;
 
 const isTauri = () =>
@@ -109,4 +111,55 @@ export async function clearModel() {
   const s = lsStore();
   if (!s) return;
   try { s.removeItem(KEY); } catch { /* ignore */ }
+}
+
+// ── Crash recovery ──────────────────────────────────────────────────────────
+// A SEPARATE snapshot written on (nearly) every change, INCLUDING the live draft
+// and selection that the committed model file doesn't hold. If the app crashes
+// or is force-quit mid-edit, on next launch we detect this file and offer to
+// restore. On a clean save/exit we clear it, so its mere presence == "unclean".
+
+export async function saveRecovery(snapshot) {
+  const payload = JSON.stringify({ version: VERSION, savedAt: snapshot.savedAt, ...snapshot });
+  if (isTauri()) {
+    try {
+      const { writeTextFile, mkdir, BaseDirectory } = await import('@tauri-apps/plugin-fs');
+      const opts = { baseDir: BaseDirectory.AppData };
+      try { await mkdir(DIR, { ...opts, recursive: true }); } catch { /* exists */ }
+      await writeTextFile(RECOVERY_FILE, payload, opts);
+    } catch (e) { console.error('[persistence] recovery save failed:', e); }
+    return;
+  }
+  const s = lsStore();
+  if (!s) return;
+  try { s.setItem(RECOVERY_KEY, payload); } catch { /* best-effort */ }
+}
+
+export async function loadRecovery() {
+  if (isTauri()) {
+    try {
+      const { readTextFile, exists, BaseDirectory } = await import('@tauri-apps/plugin-fs');
+      const opts = { baseDir: BaseDirectory.AppData };
+      if (!(await exists(RECOVERY_FILE, opts))) return null;
+      const data = JSON.parse(await readTextFile(RECOVERY_FILE, opts));
+      return data && data.version === VERSION ? data : null;
+    } catch (e) { console.error('[persistence] recovery load failed:', e); return null; }
+  }
+  const s = lsStore();
+  if (!s) return null;
+  try { const raw = s.getItem(RECOVERY_KEY); return raw ? JSON.parse(raw) : null; } catch { return null; }
+}
+
+export async function clearRecovery() {
+  if (isTauri()) {
+    try {
+      const { remove, exists, BaseDirectory } = await import('@tauri-apps/plugin-fs');
+      const opts = { baseDir: BaseDirectory.AppData };
+      if (await exists(RECOVERY_FILE, opts)) await remove(RECOVERY_FILE, opts);
+    } catch (e) { console.error('[persistence] recovery clear failed:', e); }
+    return;
+  }
+  const s = lsStore();
+  if (!s) return;
+  try { s.removeItem(RECOVERY_KEY); } catch { /* ignore */ }
 }

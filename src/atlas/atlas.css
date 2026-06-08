@@ -59,6 +59,21 @@
 
 .atlas-cross-issues { background: var(--bg-elevated); color: var(--bad); padding: 0.5rem 1.25rem; font-size: 0.9rem; }
 .atlas-export-msg { background: var(--bg-elevated); color: var(--ok); padding: 0.5rem 1.25rem; font-size: 0.9rem; }
+.atlas-undo-bar {
+  display: flex; align-items: center; gap: 0.75rem;
+  background: #3a2e12; color: #f0d8a0; padding: 0.5rem 1.25rem; font-size: 0.9rem;
+  border-bottom: 1px solid var(--border);
+}
+.atlas-undo-bar button {
+  background: var(--accent); color: var(--accent-fg); border: none; border-radius: 5px;
+  padding: 0.25rem 0.8rem; font-weight: 600; cursor: pointer; font-size: 0.85rem;
+}
+.atlas-undo-bar .atlas-undo-dismiss { background: transparent; color: #f0d8a0; text-decoration: underline; padding: 0.25rem 0.4rem; }
+.atlas-delete-list {
+  max-height: 180px; overflow-y: auto; margin: 0.5rem 0; padding: 0.5rem 0.75rem;
+  background: var(--bg-input); border: 1px solid var(--border); border-radius: 6px;
+  font-size: 0.85rem; color: var(--text-muted); line-height: 1.5;
+}
 
 .atlas-body { display: flex; flex: 1; min-height: 0; }
 .atlas-canvas { flex: 1; min-width: 0; background: var(--bg); }
@@ -292,7 +307,9 @@
   padding: 0.5rem 1.1rem; cursor: pointer; font-weight: 600; font-size: 0.95rem;
 }
 .atlas-modal-actions button.danger { background: #d9534f; color: #fff; }
-.atlas-modal-actions button.danger:hover { background: #c9302c; }
+.atlas-modal-actions button.danger:hover:not(:disabled) { background: #c9302c; }
+.atlas-modal-actions button:disabled { opacity: 0.45; cursor: default; }
+.atlas-delete-ack { margin: 0.75rem 0 0.25rem; font-size: 0.9rem; }
 .atlas-modal p { font-size: 0.95rem; line-height: 1.5; color: var(--text-muted); }
 .atlas-modal a { color: var(--agent); }
 
