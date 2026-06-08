@@ -12,7 +12,7 @@ function Field({ label, hint, children }) {
   );
 }
 
-export default function PropertiesPanel({ node, onChange, errors, dirty, canSave, onSave, onRevert, newObject }) {
+export default function PropertiesPanel({ node, onChange, errors, idError, dirty, canSave, onSave, onRevert, newObject }) {
   if (!node) {
     return (
       <div className="atlas-panel empty">
@@ -23,6 +23,10 @@ export default function PropertiesPanel({ node, onChange, errors, dirty, canSave
 
   const d = node.data;
   const set = (patch) => onChange(node.id, patch);
+  // id is the durable join key (manifest filename + telemetry tag that
+  // conformance matches running spans back to). It is set once at creation and
+  // locked thereafter — editable only while the object is a brand-new draft.
+  const idLocked = !newObject;
 
   return (
     // autoCapitalize/Correct/spellCheck off so ids like "db-connect" aren't
@@ -34,7 +38,14 @@ export default function PropertiesPanel({ node, onChange, errors, dirty, canSave
           <button className="atlas-revert" onClick={onRevert} disabled={!dirty} title={newObject ? 'Discard this new object' : 'Revert changes'}>
             {newObject ? 'Discard' : 'Revert'}
           </button>
-          <button className="atlas-save" onClick={onSave} disabled={!canSave} title={canSave ? 'Save changes' : 'Fill required fields to save'}>
+          <button
+            className="atlas-save"
+            onClick={onSave}
+            // Stay clickable when the only blocker is a duplicate id, so clicking
+            // Save surfaces an explicit pop-up rather than a silent disabled button.
+            disabled={!canSave && !idError}
+            title={canSave ? 'Save changes' : (idError ? 'Duplicate id' : 'Fill required fields to save')}
+          >
             Save
           </button>
         </div>
@@ -42,8 +53,10 @@ export default function PropertiesPanel({ node, onChange, errors, dirty, canSave
 
       {node.type === 'task' ? (
         <>
-          <Field label="id" hint="lowercase, hyphens">
-            <input value={d.id || ''} onChange={(e) => set({ id: e.target.value.toLowerCase() })} placeholder="ingest-mssql-data" />
+          <Field label="id" hint={idLocked ? 'set at creation — the durable identity, not editable' : 'lowercase, hyphens — set once; cannot be changed after saving'}>
+            <input className={idError ? 'atlas-input-error' : ''} value={d.id || ''} disabled={idLocked} readOnly={idLocked}
+              onChange={(e) => set({ id: e.target.value.toLowerCase() })} placeholder="ingest-mssql-data" />
+            {idError && <div className="atlas-field-error">{idError}</div>}
           </Field>
           <Field label="label" hint="human-readable name shown on the canvas">
             <input value={d.label || ''} onChange={(e) => set({ label: e.target.value })} placeholder="Ingest MS SQL Data" />
@@ -54,8 +67,10 @@ export default function PropertiesPanel({ node, onChange, errors, dirty, canSave
         </>
       ) : (
         <>
-          <Field label="id" hint="lowercase, hyphens; matches the manifest filename">
-            <input value={d.id || ''} onChange={(e) => set({ id: e.target.value.toLowerCase() })} placeholder="intake-classifier" />
+          <Field label="id" hint={idLocked ? 'set at creation — the durable identity (manifest filename + telemetry tag), not editable' : 'lowercase, hyphens — set once; matches the manifest filename; cannot be changed after saving'}>
+            <input className={idError ? 'atlas-input-error' : ''} value={d.id || ''} disabled={idLocked} readOnly={idLocked}
+              onChange={(e) => set({ id: e.target.value.toLowerCase() })} placeholder="intake-classifier" />
+            {idError && <div className="atlas-field-error">{idError}</div>}
           </Field>
           <Field label="owner">
             <input value={d.owner || ''} onChange={(e) => set({ owner: e.target.value })} placeholder="platform-team" />
