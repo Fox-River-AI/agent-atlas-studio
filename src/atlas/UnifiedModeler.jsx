@@ -8,7 +8,7 @@ import JSZip from 'jszip';
 import UnifiedGraph from './UnifiedGraph';
 import PropertiesPanel from './PropertiesPanel';
 import ModelTree from './ModelTree';
-import RequirementsModal from './RequirementsModal';
+import RequirementsView from './RequirementsView';
 import { SettingsModal, AboutModal } from './Modals';
 import { useTheme } from './ThemeContext';
 import { httpEndpointProvider } from './modelProvider';
@@ -37,6 +37,12 @@ export default function UnifiedModeler() {
   const [treeCollapsed, setTreeCollapsed] = useState(false);
   const [panelOpen, setPanelOpen] = useState(true);
   const [modal, setModal] = useState(null); // 'settings' | 'about'
+  // Left-panel section (DIAG-38): 'requirements' (doc editor) | 'model' (graph).
+  const [section, setSection] = useState('model');
+  // The single requirements project — { name, text } or null until created.
+  // Persisted with the model. The MODEL is canonical; this doc seeds it (DIAG-38)
+  // and is rendered FROM it (DIAG-41).
+  const [requirements, setRequirements] = useState(null);
   // Subject Areas = saved views: { id, name, memberIds: [], hiddenIds: [] }. null = whole model.
   const [subjectAreas, setSubjectAreas] = useState(SEED_SUBJECT_AREAS);
   const [currentSA, setCurrentSA] = useState(null);
@@ -112,6 +118,7 @@ export default function UnifiedModeler() {
         setSubjectAreas(cleanSAs);
         setLayouts(saved.layouts);
         setViewports(saved.viewports);
+        if (saved.requirements) setRequirements(saved.requirements);
       }
       if (!cancelled) hydrated.current = true;
       // Crash recovery: if a recovery snapshot holds an uncommitted draft from a
@@ -145,10 +152,10 @@ export default function UnifiedModeler() {
     if (!hydrated.current) return;
     if (saveTimer.current) clearTimeout(saveTimer.current);
     saveTimer.current = setTimeout(() => {
-      saveModel({ objects, edges, expanded, subjectAreas, layouts, viewports });
+      saveModel({ objects, edges, expanded, subjectAreas, layouts, viewports, requirements });
     }, 400);
     return () => { if (saveTimer.current) clearTimeout(saveTimer.current); };
-  }, [objects, edges, expanded, subjectAreas, layouts, viewports]);
+  }, [objects, edges, expanded, subjectAreas, layouts, viewports, requirements]);
 
   // CRASH RECOVERY (requirement #3): write a recovery snapshot on every change,
   // INCLUDING the in-progress draft + selection that the committed model file
@@ -209,17 +216,44 @@ export default function UnifiedModeler() {
     setPendingNew(null);
   }, []);
 
-  // Orchestrate generation: call the configured endpoint, normalize the result
-  // (degrade, don't crash), and apply it. The model is a DRAFT to refine — it then
-  // passes (or fails) the SAME validity gates as a hand-built model. Returns
-  // { notes } on success; throws (with a legible message) on provider failure.
-  const handleGenerate = useCallback(async (requirementsText) => {
+  // Seed the model FROM the requirements doc (DIAG-38). Doc → Model is a deliberate
+  // SEED that OVERWRITES the current model — so snapshot it first for one-step undo,
+  // and (if the existing model has content) confirm before replacing. After seeding,
+  // the model is canonical and refined in Model mode. Returns { notes } / { cancelled }.
+  const [modelUndo, setModelUndo] = useState(null); // { objects, edges, expanded, subjectAreas, layouts, viewports } | null
+  const generateFromRequirements = useCallback(async () => {
+    const text = requirements?.text || '';
+    if (!text.trim()) { const e = new Error('The requirements document is empty.'); throw e; }
+    // Confirm the overwrite if there's a real model already (more than a lone orchestrator).
+    const meaningful = Object.values(objects).filter((o) => o.kind !== 'orchestrator').length;
+    if (meaningful > 0) {
+      const ok = await new Promise((resolve) => setSeedConfirm({ count: meaningful, resolve }));
+      if (!ok) return { cancelled: true };
+    }
     const provider = httpEndpointProvider(endpointUrl);
-    const { model: raw, notes } = await provider.generateModel(requirementsText);
+    const { model: raw, notes } = await provider.generateModel(text);
     const { model, problems } = normalizeGeneratedModel(raw);
+    // Snapshot the model we're about to overwrite (one-step undo).
+    setModelUndo({ objects, edges, expanded, subjectAreas, layouts, viewports });
     applyGeneratedModel(model);
+    setSection('model'); // jump to the freshly seeded model to refine it
     return { notes: [...notes, ...problems] };
-  }, [endpointUrl, applyGeneratedModel]);
+  }, [requirements, objects, edges, expanded, subjectAreas, layouts, viewports, endpointUrl, applyGeneratedModel]);
+
+  // Restore the model as it was before the last generate-seed.
+  const undoGenerate = useCallback(() => {
+    if (!modelUndo) return;
+    setObjects(modelUndo.objects); setEdges(modelUndo.edges); setExpanded(modelUndo.expanded);
+    setSubjectAreas(modelUndo.subjectAreas); setLayouts(modelUndo.layouts); setViewports(modelUndo.viewports);
+    setCurrentSA(null); setSelectedId(null); setDraft(null); setPendingNew(null);
+    setModelUndo(null);
+  }, [modelUndo]);
+
+  // Requirements doc handlers (DIAG-38).
+  const createRequirements = useCallback((name) => setRequirements({ name: name || 'Platform Modernization', text: '' }), []);
+  const setRequirementsText = useCallback((text) => setRequirements((r) => ({ ...(r || { name: 'Platform Modernization' }), text })), []);
+  const importRequirements = useCallback((name, text) => setRequirements({ name: name || 'Platform Modernization', text: text ?? '' }), []);
+  const [seedConfirm, setSeedConfirm] = useState(null); // { count, resolve } | null
 
   const toggleExpand = useCallback((id) => setExpanded((e) => ({ ...e, [id]: !e[id] })), []);
 
@@ -705,7 +739,13 @@ export default function UnifiedModeler() {
           <img className="atlas-logo" src={`${import.meta.env.BASE_URL}agent-atlas-logo.svg`} alt="" aria-hidden="true" />
           <h1>Agent Atlas</h1>
         </div>
-        <div className="atlas-actions">
+        <div className="atlas-section-switch" role="tablist">
+          <button role="tab" className={section === 'requirements' ? 'active' : ''}
+            onClick={() => guardedNavigate(() => setSection('requirements'))}>Requirements</button>
+          <button role="tab" className={section === 'model' ? 'active' : ''}
+            onClick={() => setSection('model')}>Model</button>
+        </div>
+        <div className="atlas-actions" style={{ visibility: section === 'model' ? 'visible' : 'hidden' }}>
           {allValid ? (
             <span className="atlas-status ok">✓ registry valid</span>
           ) : (
@@ -784,6 +824,14 @@ export default function UnifiedModeler() {
         );
       })()}
 
+      {modelUndo && (
+        <div className="atlas-undo-bar">
+          <span>Model was replaced by one generated from requirements.</span>
+          <button onClick={undoGenerate}>Undo generate</button>
+          <button className="atlas-undo-dismiss" onClick={() => setModelUndo(null)}>Dismiss</button>
+        </div>
+      )}
+
       {showIssues && issues.length > 0 && (
         <div className="atlas-issues-bar">
           {issues.map((it) => (
@@ -800,6 +848,17 @@ export default function UnifiedModeler() {
       )}
 
       <div className="atlas-body">
+       {section === 'requirements' ? (
+        <RequirementsView
+          requirements={requirements}
+          onCreate={createRequirements}
+          onChangeText={setRequirementsText}
+          onImport={importRequirements}
+          onGenerate={generateFromRequirements}
+          endpointConfigured={!!endpointUrl}
+        />
+       ) : (
+        <>
         <ModelTree
           objects={visibleObjects}
           expanded={expanded}
@@ -866,6 +925,8 @@ export default function UnifiedModeler() {
             newObject={pendingNew === draft?.id}
           />
         )}
+        </>
+       )}
       </div>
 
       {idAlert && (
@@ -1007,8 +1068,21 @@ export default function UnifiedModeler() {
           onCreate={(parentId) => { createObject(createKind, parentId); setCreateKind(null); }}
         />
       )}
-      {modal === 'requirements' && (
-        <RequirementsModal onGenerate={handleGenerate} onClose={() => setModal(null)} />
+      {seedConfirm && (
+        <div className="atlas-modal-backdrop" onClick={() => { seedConfirm.resolve(false); setSeedConfirm(null); }}>
+          <div className="atlas-modal" onClick={(e) => e.stopPropagation()}>
+            <h2>Replace the current model?</h2>
+            <p className="atlas-empty">
+              Generating from requirements builds a fresh model and <strong>replaces your
+              current one</strong> ({seedConfirm.count} object{seedConfirm.count === 1 ? '' : 's'}).
+              You can Undo immediately after.
+            </p>
+            <div className="atlas-modal-actions">
+              <button className="atlas-slider-reset" onClick={() => { seedConfirm.resolve(false); setSeedConfirm(null); }}>Cancel</button>
+              <button className="danger" onClick={() => { seedConfirm.resolve(true); setSeedConfirm(null); }}>Replace &amp; generate</button>
+            </div>
+          </div>
+        </div>
       )}
       {modal === 'settings' && <SettingsModal onClose={() => setModal(null)} />}
       {modal === 'about' && <AboutModal onClose={() => setModal(null)} />}

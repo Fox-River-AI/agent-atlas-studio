@@ -35,6 +35,7 @@ createServer((req, res) => {
     req.on('end', () => {
       let reqLen = 0;
       try { reqLen = (JSON.parse(body || '{}').requirements || '').length; } catch { /* ignore */ }
+      console.log(`[${new Date().toISOString()}] POST ${req.url} — ${reqLen} chars → returning ${Object.keys(sample.objects).length}-object model`);
       res.writeHead(200, { ...CORS, 'content-type': 'application/json' });
       res.end(JSON.stringify({
         model: sample,

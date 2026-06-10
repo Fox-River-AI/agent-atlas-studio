@@ -485,3 +485,40 @@
 .atlas-ctx-group:last-child { border-bottom: none; }
 .atlas-ctx-grouplabel { font-size: 0.72rem; color: var(--text-muted); padding: 0.2rem 0.9rem; letter-spacing: 0.5px; }
 .atlas-ctxmenu .atlas-ctx-new { color: var(--agent); font-style: italic; }
+
+/* ── DIAG-38: section switcher (Requirements | Model) + Requirements doc view ── */
+.atlas-section-switch { display: flex; gap: 0.3rem; margin: 0 1rem; }
+.atlas-section-switch button {
+  padding: 0.35rem 0.9rem; border-radius: 6px; cursor: pointer; font-size: 0.9rem; font-weight: 600;
+  background: transparent; color: var(--text-muted); border: 1px solid var(--border-soft);
+}
+.atlas-section-switch button:hover { color: var(--text); }
+.atlas-section-switch button.active { background: var(--accent); color: var(--accent-fg); border-color: var(--accent); }
+
+.atlas-reqview { flex: 1; min-width: 0; display: flex; flex-direction: column; background: var(--bg); }
+.atlas-reqview.empty { align-items: center; justify-content: center; }
+.atlas-reqview-empty { max-width: 540px; padding: 2rem; text-align: center; color: var(--text-muted); }
+.atlas-reqview-empty h2 { color: var(--accent); margin-bottom: 0.5rem; }
+.atlas-reqview-empty p { line-height: 1.5; margin-bottom: 1.25rem; }
+.atlas-reqview-actions { display: flex; gap: 0.75rem; justify-content: center; align-items: center; flex-wrap: wrap; }
+.atlas-reqview-import, .atlas-reqview-reimport { cursor: pointer; color: var(--agent); font-size: 0.9rem; }
+.atlas-reqview-import input, .atlas-reqview-reimport input { display: none; }
+.atlas-reqview-empty button, .atlas-reqview-generate {
+  background: var(--accent); color: var(--accent-fg); border: none; border-radius: 6px;
+  padding: 0.45rem 1rem; font-weight: 600; cursor: pointer; font-size: 0.9rem;
+}
+.atlas-reqview-generate:disabled { opacity: 0.45; cursor: default; }
+.atlas-reqview-head { display: flex; align-items: center; gap: 0.75rem; padding: 0.6rem 1rem; border-bottom: 1px solid var(--border); }
+.atlas-reqview-name { flex: 1; background: transparent; border: none; color: var(--text); font-size: 1.05rem; font-weight: 700; }
+.atlas-reqview-name:focus { outline: none; }
+.atlas-reqview-headactions { display: flex; align-items: center; gap: 0.75rem; }
+.atlas-reqview-hint { padding: 0.4rem 1rem; font-size: 0.85rem; color: var(--text-muted); background: var(--bg-elevated); }
+.atlas-reqview-msg { padding: 0.4rem 1rem; font-size: 0.88rem; }
+.atlas-reqview-msg.ok { color: var(--ok); background: var(--bg-elevated); }
+.atlas-reqview-msg.err { color: var(--bad); background: var(--bg-elevated); }
+.atlas-reqview-doc {
+  flex: 1; width: 100%; box-sizing: border-box; resize: none; border: none; outline: none;
+  background: var(--bg); color: var(--text); padding: 1.25rem 1.5rem;
+  font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 0.92rem; line-height: 1.6;
+}
+.atlas-reqview-foot { padding: 0.4rem 1rem; font-size: 0.8rem; color: var(--text-dim); border-top: 1px solid var(--border-soft); }
