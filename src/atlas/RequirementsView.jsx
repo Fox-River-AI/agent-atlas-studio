@@ -4,7 +4,7 @@
 // The MODEL is canonical; this doc seeds it (overwrite + warn + undo) and is later
 // rendered FROM it (DIAG-41). Edit in a textarea; Preview renders the Markdown
 // (so **bold** shows as bold, not literal asterisks) via react-markdown + GFM.
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 
@@ -20,6 +20,20 @@ export default function RequirementsView({
   const [msg, setMsg] = useState(null);
   const [err, setErr] = useState(null);
   const [mode, setMode] = useState('edit'); // 'edit' | 'preview'
+  const [elapsed, setElapsed] = useState(0); // seconds the current generation has run
+  const tick = useRef(null);
+
+  // While generating, tick a once-a-second elapsed counter so the user sees the
+  // run is alive (a full-doc model takes ~2-3 min; without this it's a frozen
+  // "Generating…"). Cleared whenever we stop being busy.
+  useEffect(() => {
+    if (!busy) { if (tick.current) { clearInterval(tick.current); tick.current = null; } return; }
+    setElapsed(0);
+    tick.current = setInterval(() => setElapsed((s) => s + 1), 1000);
+    return () => { if (tick.current) { clearInterval(tick.current); tick.current = null; } };
+  }, [busy]);
+
+  const fmtElapsed = (s) => (s < 60 ? `${s}s` : `${Math.floor(s / 60)}m ${String(s % 60).padStart(2, '0')}s`);
 
   const importFile = async (e) => {
     const f = e.target.files?.[0];
@@ -98,13 +112,20 @@ export default function RequirementsView({
             disabled={busy || !requirements.text?.trim()}
             title={endpointConfigured ? 'Seed the model from these requirements (replaces the current model)' : 'Set a model endpoint in Settings first'}
           >
-            {busy ? 'Generating…' : 'Generate model from requirements'}
+            {busy ? `Generating… ${fmtElapsed(elapsed)}` : 'Generate model from requirements'}
           </button>
         </div>
       </div>
 
       {!endpointConfigured && (
         <div className="atlas-reqview-hint">No model endpoint set — add one in Settings to enable “Generate model”.</div>
+      )}
+      {busy && (
+        <div className="atlas-reqview-msg working">
+          <span className="atlas-spinner" aria-hidden="true" />
+          Generating the model from your requirements — this can take a couple of minutes.
+          Elapsed {fmtElapsed(elapsed)}.
+        </div>
       )}
       {msg && <div className="atlas-reqview-msg ok">{msg}</div>}
       {err && <div className="atlas-reqview-msg err">{err}</div>}
