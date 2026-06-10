@@ -8,7 +8,11 @@ import JSZip from 'jszip';
 import UnifiedGraph from './UnifiedGraph';
 import PropertiesPanel from './PropertiesPanel';
 import ModelTree from './ModelTree';
+import RequirementsModal from './RequirementsModal';
 import { SettingsModal, AboutModal } from './Modals';
+import { useTheme } from './ThemeContext';
+import { httpEndpointProvider } from './modelProvider';
+import { normalizeGeneratedModel } from './normalizeModel';
 import { VALIDATORS, formatErrors, DEFAULT_MODEL } from './schema';
 import { manifestFor, buildRegistry, buildBundle, crossChecks } from './model';
 import { blankData, CREATABLE_KINDS } from './blankData';
@@ -19,6 +23,7 @@ import { SEED_OBJECTS, SEED_EDGES, SEED_EXPANDED, SEED_SUBJECT_AREAS } from './s
 import { loadModel, saveModel, clearModel, saveRecovery, loadRecovery, clearRecovery } from './persistence';
 
 export default function UnifiedModeler() {
+  const { endpointUrl } = useTheme();
   // Render the demo seed first; if a saved model exists on disk it's loaded
   // asynchronously on mount (see the hydrate effect) and swapped in. Persistence
   // is a real file in Tauri (localStorage doesn't survive restart on the dev
@@ -182,6 +187,39 @@ export default function UnifiedModeler() {
     setCurrentSA(null);
     setSelectedId(null);
   }, []);
+
+  // Apply a generated/normalized model as a fresh REPLACE (DIAG-37). Same shape as
+  // resetToDemo — assigns the new content, clears layouts/viewports (→ auto-fit),
+  // and resets selection/draft so the draft machinery has a clean slate. Autosave
+  // then persists it like any model.
+  const applyGeneratedModel = useCallback((model) => {
+    const expanded = {};
+    for (const o of Object.values(model.objects)) {
+      if (o.kind === 'orchestrator' || o.kind === 'task') expanded[o.id] = true;
+    }
+    setObjects(model.objects);
+    setEdges(model.edges);
+    setExpanded(expanded);
+    setSubjectAreas(model.subjectAreas);
+    setLayouts({});
+    setViewports({});
+    setCurrentSA(null);
+    setSelectedId(null);
+    setDraft(null);
+    setPendingNew(null);
+  }, []);
+
+  // Orchestrate generation: call the configured endpoint, normalize the result
+  // (degrade, don't crash), and apply it. The model is a DRAFT to refine — it then
+  // passes (or fails) the SAME validity gates as a hand-built model. Returns
+  // { notes } on success; throws (with a legible message) on provider failure.
+  const handleGenerate = useCallback(async (requirementsText) => {
+    const provider = httpEndpointProvider(endpointUrl);
+    const { model: raw, notes } = await provider.generateModel(requirementsText);
+    const { model, problems } = normalizeGeneratedModel(raw);
+    applyGeneratedModel(model);
+    return { notes: [...notes, ...problems] };
+  }, [endpointUrl, applyGeneratedModel]);
 
   const toggleExpand = useCallback((id) => setExpanded((e) => ({ ...e, [id]: !e[id] })), []);
 
@@ -779,6 +817,7 @@ export default function UnifiedModeler() {
           onToggleCollapse={() => setTreeCollapsed((c) => !c)}
           onOpenSettings={() => setModal('settings')}
           onOpenAbout={() => setModal('about')}
+          onOpenRequirements={() => guardedNavigate(() => setModal('requirements'))}
           inSubjectArea={!!currentSA}
           canDelete={!currentSA}
           hiddenIds={hiddenInView}
@@ -967,6 +1006,9 @@ export default function UnifiedModeler() {
           onCancel={() => setCreateKind(null)}
           onCreate={(parentId) => { createObject(createKind, parentId); setCreateKind(null); }}
         />
+      )}
+      {modal === 'requirements' && (
+        <RequirementsModal onGenerate={handleGenerate} onClose={() => setModal(null)} />
       )}
       {modal === 'settings' && <SettingsModal onClose={() => setModal(null)} />}
       {modal === 'about' && <AboutModal onClose={() => setModal(null)} />}

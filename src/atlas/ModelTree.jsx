@@ -136,7 +136,7 @@ export default function ModelTree({
   subjectAreas, currentSA, onSelectSA, onNewSA, onEditSA,
   onCreate, collapsed, onToggleCollapse, onOpenSettings, onOpenAbout,
   inSubjectArea, canDelete, hiddenIds, onGoTo, onToggleHide, onDelete,
-  hiddenCount = 0, onShowAllInView, onAddChild, onAddTopLevel,
+  hiddenCount = 0, onShowAllInView, onAddChild, onAddTopLevel, onOpenRequirements,
 }) {
   // Roots = objects whose parent is not in the current (possibly SA-filtered)
   // set. In "All" that's the orchestrator; in a Subject Area it's the member
@@ -217,6 +217,9 @@ export default function ModelTree({
               <button key={k.kind} onClick={() => { onCreate(k.kind); setCreateOpen(false); }}>{k.label}</button>
             ))}
           </div>
+        )}
+        {onOpenRequirements && (
+          <button className="atlas-sa-new" onClick={onOpenRequirements} title="Generate a first-cut model from a requirements doc">✦ Generate from requirements</button>
         )}
       </div>
 

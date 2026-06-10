@@ -91,6 +91,10 @@ export function ThemeProvider({ children }) {
     const v = parseFloat(localStorage.getItem('atlas-font-scale'));
     return Number.isFinite(v) ? v : FONT_SCALE.default;
   });
+  // Requirements→Model endpoint (DIAG-37): the adopter's backend URL that turns a
+  // requirements doc into a first-cut model. Small config — localStorage on both
+  // builds. Never a key, only a URL (the key lives server-side).
+  const [endpointUrl, setEndpointUrl] = useState(() => localStorage.getItem('atlas-model-endpoint') || '');
 
   useEffect(() => {
     const theme = THEMES[themeId] || THEMES.dark;
@@ -105,8 +109,12 @@ export function ThemeProvider({ children }) {
     localStorage.setItem('atlas-font-scale', String(fontScale));
   }, [fontScale]);
 
+  useEffect(() => {
+    localStorage.setItem('atlas-model-endpoint', endpointUrl || '');
+  }, [endpointUrl]);
+
   return (
-    <ThemeContext.Provider value={{ themeId, setThemeId, fontScale, setFontScale }}>
+    <ThemeContext.Provider value={{ themeId, setThemeId, fontScale, setFontScale, endpointUrl, setEndpointUrl }}>
       {children}
     </ThemeContext.Provider>
   );

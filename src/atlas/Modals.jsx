@@ -14,7 +14,7 @@ function Backdrop({ onClose, children }) {
 }
 
 export function SettingsModal({ onClose }) {
-  const { themeId, setThemeId, fontScale, setFontScale } = useTheme();
+  const { themeId, setThemeId, fontScale, setFontScale, endpointUrl, setEndpointUrl } = useTheme();
   const pct = Math.round(fontScale * 100);
   return (
     <Backdrop onClose={onClose}>
@@ -50,6 +50,20 @@ export function SettingsModal({ onClose }) {
           <button className="atlas-slider-reset" onClick={() => setFontScale(FONT_SCALE.default)}>Reset</button>
         </div>
         <div className="atlas-slider-sample">The quick brown fox — sample text at {pct}%.</div>
+      </div>
+
+      <div className="atlas-modal-row">
+        <label>Requirements model endpoint — your backend URL that turns a requirements doc into a first-cut model</label>
+        <input
+          type="url"
+          value={endpointUrl}
+          onChange={(e) => setEndpointUrl(e.target.value.trim())}
+          placeholder="https://your-backend/generate-model"
+          autoCapitalize="off" autoCorrect="off" spellCheck={false}
+        />
+        <div className="atlas-slider-sample">
+          The call runs in <em>your</em> backend — never put an API key here; this is a URL only.
+        </div>
       </div>
 
       <div className="atlas-modal-actions">
