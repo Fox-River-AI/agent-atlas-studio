@@ -121,9 +121,10 @@ export default function UnifiedModeler() {
         if (saved.requirements) setRequirements(saved.requirements);
       }
       if (!cancelled) hydrated.current = true;
-      // Crash recovery: if a recovery snapshot holds an uncommitted draft from a
-      // previous unclean exit, offer to restore it. (A clean exit leaves draft
-      // null, so nothing is offered.)
+      // Crash recovery: if a recovery snapshot holds a DIRTY uncommitted draft
+      // from a previous unclean exit, offer to restore it. The writer only stores
+      // a draft when it's actually dirty, and a clean exit clears the snapshot —
+      // so a session where you merely selected (but didn't edit) offers nothing.
       try {
         const rec = await loadRecovery();
         if (!cancelled && rec && rec.draft && rec.draft.id) {
@@ -167,12 +168,21 @@ export default function UnifiedModeler() {
   useEffect(() => {
     if (!hydrated.current) return;
     if (recoveryTimer.current) clearTimeout(recoveryTimer.current);
+    // Only a DIRTY draft is "unsaved work." Merely selecting an object opens a
+    // draft that mirrors the committed data — that is not an edit, so we must not
+    // persist it as recoverable (else every clean session prompts on next launch).
+    // Dirty = a brand-new uncommitted object, or a draft whose data differs from
+    // what's committed in the model.
+    const dirty = !!draft && (
+      pendingNew === draft.id ||
+      JSON.stringify(draft.data) !== JSON.stringify(objects[draft.id]?.data)
+    );
     recoveryTimer.current = setTimeout(() => {
       saveRecovery({
         savedAt: Date.now(),
         model: { objects, edges, expanded, subjectAreas, layouts, viewports },
         // include the kind so a brand-new uncommitted object can be rebuilt
-        draft: draft ? { ...draft, kind: objects[draft.id]?.kind } : null,
+        draft: dirty ? { ...draft, kind: objects[draft.id]?.kind } : null,
         selectedId,
         pendingNew,
       });
@@ -577,6 +587,17 @@ export default function UnifiedModeler() {
     pendingNew === draft.id ||
     JSON.stringify(draft.data) !== JSON.stringify(objects[draft.id]?.data)
   );
+
+  // Clean-exit guarantee: when the window closes with NO dirty draft, wipe the
+  // recovery snapshot so a stale one can never trigger the restore prompt next
+  // launch. If a dirty draft IS open at close, we leave the snapshot intact so
+  // the genuine unsaved edit can be recovered. This makes "only ask when I made
+  // an unsaved change" true regardless of what was merely selected.
+  useEffect(() => {
+    const onClose = () => { if (!draftDirty) clearRecovery(); };
+    window.addEventListener('beforeunload', onClose);
+    return () => window.removeEventListener('beforeunload', onClose);
+  }, [draftDirty]);
 
   // Save/Discard/Cancel prompt. ALL navigation (tree, canvas, go-to, issues, SA
   // switch, reset, SA editor) routes through this so unsaved edits are never

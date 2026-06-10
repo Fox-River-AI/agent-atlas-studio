@@ -52,12 +52,69 @@ export function httpEndpointProvider(endpointUrl) {
         e.code = 'parse';
         throw e;
       }
-      // Tolerate either { model, notes } or a bare model object.
+      // ASYNC JOB (202 + job_id): a full-doc generation runs minutes — longer than
+      // a webview will hold one fetch open — so the backend returns a job id and we
+      // POLL for the result with fast GETs. (A synchronous backend returns 200 with
+      // {model,notes} directly; that path is handled below, unchanged.)
+      if (json && json.job_id && (json.status === 'pending' || res.status === 202)) {
+        return pollJob(endpointUrl, json.job_id);
+      }
+      // Synchronous: tolerate either { model, notes } or a bare model object.
       const model = json && json.model ? json.model : json;
       const notes = Array.isArray(json?.notes) ? json.notes : [];
       return { model, notes };
     },
   };
+}
+
+// Poll GET <endpoint>/<job_id> until the job finishes. Each call is quick (well
+// under any webview request cap), so total wait is unbounded by design — the work
+// itself can take minutes. Gives up only on an explicit error or a hard ceiling.
+async function pollJob(endpointUrl, jobId) {
+  const statusUrl = `${endpointUrl.replace(/\/+$/, '')}/${jobId}`;
+  const INTERVAL_MS = 3000;
+  const MAX_WAIT_MS = 10 * 60 * 1000; // 10 min hard ceiling — far past a normal full-doc run
+  const deadline = Date.now() + MAX_WAIT_MS;
+  // small helper; avoids pulling in a timer lib
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  while (Date.now() < deadline) {
+    await sleep(INTERVAL_MS);
+    let res;
+    try {
+      res = await fetch(statusUrl, { method: 'GET' });
+    } catch (err) {
+      // A transient poll failure shouldn't kill the whole generation — keep trying
+      // until the deadline, then surface it.
+      if (Date.now() >= deadline) {
+        const e = new Error(`Lost contact with the generation job (${statusUrl}). [${err?.message || err}]`);
+        e.code = 'network';
+        throw e;
+      }
+      continue;
+    }
+    if (!res.ok) {
+      let body = '';
+      try { body = (await res.text()).slice(0, 300); } catch { /* ignore */ }
+      const e = new Error(`Job status returned ${res.status} ${res.statusText}. ${body}`);
+      e.code = 'http';
+      throw e;
+    }
+    let s;
+    try { s = await res.json(); } catch { continue; }
+    if (s.status === 'pending') continue;
+    if (s.status === 'error') {
+      const e = new Error(s.error || 'The generator reported an error.');
+      e.code = 'generation';
+      throw e;
+    }
+    // done
+    const model = s.model || {};
+    const notes = Array.isArray(s.notes) ? s.notes : [];
+    return { model, notes };
+  }
+  const e = new Error('Generation timed out (no result after 10 minutes). The job may still be running on the server.');
+  e.code = 'timeout';
+  throw e;
 }
 
 // Adapter: a stub that ignores input and returns a fixed model. Lets the feature
