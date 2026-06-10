@@ -10,7 +10,7 @@ import PropertiesPanel from './PropertiesPanel';
 import ModelTree from './ModelTree';
 import { SettingsModal, AboutModal } from './Modals';
 import { VALIDATORS, formatErrors, DEFAULT_MODEL } from './schema';
-import { manifestFor, buildRegistry, crossChecks } from './model';
+import { manifestFor, buildRegistry, buildBundle, crossChecks } from './model';
 import { blankData, CREATABLE_KINDS } from './blankData';
 import { canConnect, connectionReason, parentKindsFor } from './relationships';
 import { namedIssues } from './validationMessages';
@@ -573,6 +573,49 @@ export default function UnifiedModeler() {
     setExportMsg(`Exported ${count} file(s) (check your browser downloads).`);
   };
 
+  // DIAG-15: export the full BUILD BUNDLE — the on-disk registry + governance
+  // (CLAUDE.md, .claude/settings.json, the PreToolUse hook, the CI validator) —
+  // a project an AI coding agent can open and build the platform in.
+  // In Tauri: pick a folder, write the file TREE (mkdir + writeTextFile per path).
+  // On web (can't write a tree): download the whole bundle as a zip to unzip.
+  const exportBundle = async () => {
+    const files = buildBundle(asNodes, edges);
+    const count = Object.keys(files).length;
+    if (!count) { setExportMsg('Nothing to export yet — add some objects.'); return; }
+    const isTauri = typeof window !== 'undefined' && !!window.__TAURI_INTERNALS__;
+
+    if (isTauri) {
+      try {
+        const { open } = await import('@tauri-apps/plugin-dialog');
+        const { writeTextFile, mkdir } = await import('@tauri-apps/plugin-fs');
+        const dir = await open({ directory: true, title: 'Choose an empty folder for the build bundle' });
+        if (!dir) { setExportMsg('Export cancelled.'); return; }
+        const made = new Set();
+        for (const [rel, content] of Object.entries(files)) {
+          const full = `${dir}/${rel}`;
+          const parent = full.slice(0, full.lastIndexOf('/'));
+          if (parent && !made.has(parent)) { try { await mkdir(parent, { recursive: true }); } catch { /* exists */ } made.add(parent); }
+          await writeTextFile(full, content);
+        }
+        setExportMsg(`Build bundle written (${count} files) → ${dir}`);
+      } catch (e) {
+        setExportMsg(`Bundle export failed: ${e?.message || e}`);
+      }
+      return;
+    }
+
+    // Web: zip the whole bundle (preserves the tree inside the archive).
+    const zip = new JSZip();
+    for (const [path, content] of Object.entries(files)) zip.file(path, content);
+    const blob = await zip.generateAsync({ type: 'blob' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = 'agent-atlas-build-bundle.zip';
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    setExportMsg(`Build bundle (${count} files) downloaded — unzip to a folder, then open it in your coding agent.`);
+  };
+
   const selected = selectedId ? objects[selectedId] : null;
 
   // Validate the DRAFT (substitute its data into the node list) so the panel's
@@ -637,6 +680,7 @@ export default function UnifiedModeler() {
             </button>
           )}
           <button className="primary" onClick={exportRegistry} disabled={!allValid}>Export registry</button>
+          <button className="primary" onClick={exportBundle} disabled={!allValid} title="Registry + CLAUDE.md + hooks — a project a coding agent can build in">Export build bundle</button>
           <button className="atlas-panel-toggle" onClick={() => setModal('reset')}
             title="Discard saved changes and reload the demo model">Reset to demo</button>
           <button className="atlas-panel-toggle" onClick={() => setPanelOpen((o) => !o)}
