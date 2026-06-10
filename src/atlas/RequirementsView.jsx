@@ -2,8 +2,11 @@
 // the single requirements project. Create the project (one allowed, like the
 // orchestrator), import a .md/.txt or write directly, and seed the model from it.
 // The MODEL is canonical; this doc seeds it (overwrite + warn + undo) and is later
-// rendered FROM it (DIAG-41). Markdown is plain text here (tier A).
+// rendered FROM it (DIAG-41). Edit in a textarea; Preview renders the Markdown
+// (so **bold** shows as bold, not literal asterisks) via react-markdown + GFM.
 import React, { useState } from 'react';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 
 export default function RequirementsView({
   requirements,       // { name, text } | null
@@ -16,6 +19,7 @@ export default function RequirementsView({
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState(null);
   const [err, setErr] = useState(null);
+  const [mode, setMode] = useState('edit'); // 'edit' | 'preview'
 
   const importFile = async (e) => {
     const f = e.target.files?.[0];
@@ -69,6 +73,21 @@ export default function RequirementsView({
           aria-label="Requirements project name"
         />
         <div className="atlas-reqview-headactions">
+          <div className="atlas-reqview-modes" role="tablist" aria-label="Document view">
+            <button
+              role="tab"
+              aria-selected={mode === 'edit'}
+              className={mode === 'edit' ? 'active' : ''}
+              onClick={() => setMode('edit')}
+            >Edit</button>
+            <button
+              role="tab"
+              aria-selected={mode === 'preview'}
+              className={mode === 'preview' ? 'active' : ''}
+              onClick={() => setMode('preview')}
+              title="Render the Markdown (bold, headings, lists, tables)"
+            >Preview</button>
+          </div>
           <label className="atlas-reqview-reimport" title="Replace with an imported file">
             Import…
             <input type="file" accept=".md,.txt,text/plain,text/markdown" onChange={importFile} />
@@ -90,13 +109,23 @@ export default function RequirementsView({
       {msg && <div className="atlas-reqview-msg ok">{msg}</div>}
       {err && <div className="atlas-reqview-msg err">{err}</div>}
 
-      <textarea
-        className="atlas-reqview-doc"
-        value={requirements.text}
-        onChange={(e) => onChangeText(e.target.value)}
-        placeholder="Write the requirements / SSDD here, in Markdown…"
-        spellCheck={true}
-      />
+      {mode === 'edit' ? (
+        <textarea
+          className="atlas-reqview-doc"
+          value={requirements.text}
+          onChange={(e) => onChangeText(e.target.value)}
+          placeholder="Write the requirements / SSDD here, in Markdown…"
+          spellCheck={true}
+        />
+      ) : (
+        <div className="atlas-reqview-preview">
+          {requirements.text?.trim() ? (
+            <ReactMarkdown remarkPlugins={[remarkGfm]}>{requirements.text}</ReactMarkdown>
+          ) : (
+            <p className="atlas-empty">Nothing to preview yet — switch to Edit and write the document.</p>
+          )}
+        </div>
+      )}
       <div className="atlas-reqview-foot">
         Markdown · saved automatically · the model is generated from this document
       </div>
