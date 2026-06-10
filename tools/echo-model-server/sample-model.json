@@ -1,0 +1,1023 @@
+{
+  "objects": {
+    "modernization-orchestrator": {
+      "id": "modernization-orchestrator",
+      "kind": "orchestrator",
+      "parent": null,
+      "data": {
+        "id": "modernization-orchestrator",
+        "owner": "modernization-platform",
+        "version": "1.0.0",
+        "description": "Owns the conversion control flow: stateful graph that sequences discover→parse→map→generate→validate→review per object/batch, with conditional routing, handoff, retry/fallback, and interrupt/resume over a shared execution context.",
+        "controlFlow": "state-machine",
+        "stateStore": "state-store"
+      }
+    },
+    "discover": {
+      "id": "discover",
+      "kind": "task",
+      "parent": "modernization-orchestrator",
+      "data": {
+        "id": "discover",
+        "label": "Discover",
+        "description": "Connect to legacy sources; inventory objects (ETL jobs, schemas, tables, views, procedures) and capture dependencies."
+      }
+    },
+    "src-oracle": {
+      "id": "src-oracle",
+      "kind": "system",
+      "parent": "discover",
+      "data": {
+        "id": "src-oracle",
+        "owner": "modernization-platform",
+        "version": "1.0.0",
+        "description": "Legacy Oracle database (schemas, tables, PL/SQL procedures).",
+        "systemKind": "relational-db",
+        "connection": "jdbc:oracle:thin:@legacy-ora:1521/PROD",
+        "authScope": "src:read"
+      }
+    },
+    "src-mssql": {
+      "id": "src-mssql",
+      "kind": "system",
+      "parent": "discover",
+      "data": {
+        "id": "src-mssql",
+        "owner": "modernization-platform",
+        "version": "1.0.0",
+        "description": "Legacy Microsoft SQL Server (databases, stored procedures, views).",
+        "systemKind": "relational-db",
+        "connection": "jdbc:sqlserver://legacy-mssql:1433",
+        "authScope": "src:read"
+      }
+    },
+    "src-db2": {
+      "id": "src-db2",
+      "kind": "system",
+      "parent": "discover",
+      "data": {
+        "id": "src-db2",
+        "owner": "modernization-platform",
+        "version": "1.0.0",
+        "description": "Legacy IBM DB2 instance (on IBM server).",
+        "systemKind": "relational-db",
+        "connection": "jdbc:db2://legacy-db2:50000/PROD",
+        "authScope": "src:read"
+      }
+    },
+    "src-etl-graph": {
+      "id": "src-etl-graph",
+      "kind": "system",
+      "parent": "discover",
+      "data": {
+        "id": "src-etl-graph",
+        "owner": "modernization-platform",
+        "version": "1.0.0",
+        "description": "Graph-based legacy ETL engine (job/stage/link metadata export).",
+        "systemKind": "external-api",
+        "connection": "https://legacy-etl/api",
+        "authScope": "src:read"
+      }
+    },
+    "src-etl-sql": {
+      "id": "src-etl-sql",
+      "kind": "system",
+      "parent": "discover",
+      "data": {
+        "id": "src-etl-sql",
+        "owner": "modernization-platform",
+        "version": "1.0.0",
+        "description": "SQL-engine legacy ETL / data-virtualization layer (view & query definitions).",
+        "systemKind": "external-api",
+        "connection": "https://legacy-dv/api",
+        "authScope": "src:read"
+      }
+    },
+    "src-soa": {
+      "id": "src-soa",
+      "kind": "system",
+      "parent": "discover",
+      "data": {
+        "id": "src-soa",
+        "owner": "modernization-platform",
+        "version": "1.0.0",
+        "description": "Legacy SOAP/SOA services exposing data operations.",
+        "systemKind": "external-api",
+        "connection": "https://legacy-soa/services?wsdl",
+        "authScope": "src:read"
+      }
+    },
+    "src-flatfile": {
+      "id": "src-flatfile",
+      "kind": "system",
+      "parent": "discover",
+      "data": {
+        "id": "src-flatfile",
+        "owner": "modernization-platform",
+        "version": "1.0.0",
+        "description": "Flat-file / EDI extract drop (SFTP).",
+        "systemKind": "document-store",
+        "connection": "sftp://legacy-drop/inbound",
+        "authScope": "file:read"
+      }
+    },
+    "discovery-agent": {
+      "id": "discovery-agent",
+      "kind": "agent",
+      "parent": "discover",
+      "data": {
+        "id": "discovery-agent",
+        "owner": "modernization-platform",
+        "version": "1.0.0",
+        "responsibility": "Inventory legacy objects across sources and capture their dependency graph.",
+        "model": {
+          "provider": "anthropic",
+          "name": "claude-haiku-4-5",
+          "pinned": "claude-haiku-4-5-20251001"
+        },
+        "refusalConditions": [
+          "Required source metadata is missing, or the conversion confidence is below threshold."
+        ],
+        "refusalEmits": "needs-review",
+        "telemetry": [
+          {
+            "name": "agent.discover.inventory",
+            "attributes": [
+              "status",
+              "confidence",
+              "duration_ms"
+            ]
+          }
+        ]
+      }
+    },
+    "source-connect": {
+      "id": "source-connect",
+      "kind": "tool",
+      "parent": "discovery-agent",
+      "data": {
+        "id": "source-connect",
+        "owner": "modernization-platform",
+        "version": "1.0.0",
+        "description": "Connect to a legacy source and enumerate its objects.",
+        "effect": "read",
+        "authScope": "src:read"
+      }
+    },
+    "dependency-map": {
+      "id": "dependency-map",
+      "kind": "tool",
+      "parent": "discovery-agent",
+      "data": {
+        "id": "dependency-map",
+        "owner": "modernization-platform",
+        "version": "1.0.0",
+        "description": "Build the cross-object dependency graph.",
+        "effect": "read",
+        "authScope": "meta:write"
+      }
+    },
+    "object-catalog-write": {
+      "id": "object-catalog-write",
+      "kind": "tool",
+      "parent": "discovery-agent",
+      "data": {
+        "id": "object-catalog-write",
+        "owner": "modernization-platform",
+        "version": "1.0.0",
+        "description": "Write the discovered object inventory to the metadata catalog.",
+        "effect": "write",
+        "authScope": "meta:write"
+      }
+    },
+    "extraction-run-tracker": {
+      "id": "extraction-run-tracker",
+      "kind": "job",
+      "parent": "discover",
+      "data": {
+        "id": "extraction-run-tracker",
+        "owner": "modernization-platform",
+        "version": "1.0.0",
+        "description": "Track each extraction run for traceability across 50–80k+ objects.",
+        "queue": "discovery",
+        "trigger": "",
+        "timeoutSeconds": 3600,
+        "retries": 3
+      }
+    },
+    "parse": {
+      "id": "parse",
+      "kind": "task",
+      "parent": "modernization-orchestrator",
+      "data": {
+        "id": "parse",
+        "label": "Parse",
+        "description": "Parse each legacy object into a normalized intermediate representation (IR/AST), independent of source and target."
+      }
+    },
+    "ir-store": {
+      "id": "ir-store",
+      "kind": "system",
+      "parent": "parse",
+      "data": {
+        "id": "ir-store",
+        "owner": "modernization-platform",
+        "version": "1.0.0",
+        "description": "Intermediate-representation store for parsed legacy objects.",
+        "systemKind": "document-store",
+        "connection": "s3://modernization/ir",
+        "authScope": "ir:rw"
+      }
+    },
+    "parsing-agent": {
+      "id": "parsing-agent",
+      "kind": "agent",
+      "parent": "parse",
+      "data": {
+        "id": "parsing-agent",
+        "owner": "modernization-platform",
+        "version": "1.0.0",
+        "responsibility": "Parse a legacy object (SQL, ETL graph, or service definition) into the canonical IR/AST.",
+        "model": {
+          "provider": "anthropic",
+          "name": "claude-opus-4-8",
+          "pinned": "claude-opus-4-8"
+        },
+        "refusalConditions": [
+          "Required source metadata is missing, or the conversion confidence is below threshold."
+        ],
+        "refusalEmits": "needs-review",
+        "telemetry": [
+          {
+            "name": "agent.parse.toIR",
+            "attributes": [
+              "status",
+              "confidence",
+              "duration_ms"
+            ]
+          }
+        ]
+      }
+    },
+    "sql-parser": {
+      "id": "sql-parser",
+      "kind": "tool",
+      "parent": "parsing-agent",
+      "data": {
+        "id": "sql-parser",
+        "owner": "modernization-platform",
+        "version": "1.0.0",
+        "description": "Parse legacy SQL / PL-SQL / T-SQL into the IR.",
+        "effect": "read",
+        "authScope": "ir:write"
+      }
+    },
+    "etl-parser": {
+      "id": "etl-parser",
+      "kind": "tool",
+      "parent": "parsing-agent",
+      "data": {
+        "id": "etl-parser",
+        "owner": "modernization-platform",
+        "version": "1.0.0",
+        "description": "Parse legacy ETL job/stage definitions into the IR.",
+        "effect": "read",
+        "authScope": "ir:write"
+      }
+    },
+    "ir-write": {
+      "id": "ir-write",
+      "kind": "tool",
+      "parent": "parsing-agent",
+      "data": {
+        "id": "ir-write",
+        "owner": "modernization-platform",
+        "version": "1.0.0",
+        "description": "Persist the parsed IR for an object.",
+        "effect": "write",
+        "authScope": "ir:write"
+      }
+    },
+    "map": {
+      "id": "map",
+      "kind": "task",
+      "parent": "modernization-orchestrator",
+      "data": {
+        "id": "map",
+        "label": "Map",
+        "description": "Map source constructs to target constructs; resolve intent decisions (cardinality, keys, lineage) with confidence scoring; flag low-confidence for review."
+      }
+    },
+    "metadata-catalog": {
+      "id": "metadata-catalog",
+      "kind": "system",
+      "parent": "map",
+      "data": {
+        "id": "metadata-catalog",
+        "owner": "modernization-platform",
+        "version": "1.0.0",
+        "description": "Metadata catalog: extraction runs, dependency graphs, column-level lineage, confidence/quality signals.",
+        "systemKind": "relational-db",
+        "connection": "postgres://modernization:5432/catalog",
+        "authScope": "meta:rw"
+      }
+    },
+    "tool-registry": {
+      "id": "tool-registry",
+      "kind": "system",
+      "parent": "map",
+      "data": {
+        "id": "tool-registry",
+        "owner": "modernization-platform",
+        "version": "1.0.0",
+        "description": "Shared MCP tool registry — extractors/emitters/parsers reused across the fleet (prevents the same connector being built twice).",
+        "systemKind": "external-api",
+        "connection": "https://modernization/tool-registry",
+        "authScope": "registry:read"
+      }
+    },
+    "mapping-agent": {
+      "id": "mapping-agent",
+      "kind": "agent",
+      "parent": "map",
+      "data": {
+        "id": "mapping-agent",
+        "owner": "modernization-platform",
+        "version": "1.0.0",
+        "responsibility": "Map each source construct to its target construct and score the mapping confidence.",
+        "model": {
+          "provider": "anthropic",
+          "name": "claude-opus-4-8",
+          "pinned": "claude-opus-4-8"
+        },
+        "refusalConditions": [
+          "Required source metadata is missing, or the conversion confidence is below threshold."
+        ],
+        "refusalEmits": "needs-review",
+        "telemetry": [
+          {
+            "name": "agent.map.constructs",
+            "attributes": [
+              "status",
+              "confidence",
+              "duration_ms"
+            ]
+          }
+        ]
+      }
+    },
+    "construct-map": {
+      "id": "construct-map",
+      "kind": "tool",
+      "parent": "mapping-agent",
+      "data": {
+        "id": "construct-map",
+        "owner": "modernization-platform",
+        "version": "1.0.0",
+        "description": "Propose source→target construct mappings from the IR.",
+        "effect": "read",
+        "authScope": "meta:read"
+      }
+    },
+    "lineage-trace": {
+      "id": "lineage-trace",
+      "kind": "tool",
+      "parent": "mapping-agent",
+      "data": {
+        "id": "lineage-trace",
+        "owner": "modernization-platform",
+        "version": "1.0.0",
+        "description": "Trace column-level lineage and record it to the catalog.",
+        "effect": "write",
+        "authScope": "meta:write"
+      }
+    },
+    "confidence-score": {
+      "id": "confidence-score",
+      "kind": "tool",
+      "parent": "mapping-agent",
+      "data": {
+        "id": "confidence-score",
+        "owner": "modernization-platform",
+        "version": "1.0.0",
+        "description": "Score mapping confidence; flag low-confidence items for review.",
+        "effect": "read",
+        "authScope": "meta:read"
+      }
+    },
+    "conversion-model-router": {
+      "id": "conversion-model-router",
+      "kind": "router",
+      "parent": "mapping-agent",
+      "data": {
+        "id": "conversion-model-router",
+        "owner": "modernization-platform",
+        "version": "1.0.0",
+        "description": "Select the LLM for mapping/codegen by construct complexity, required quality, latency, and cost.",
+        "candidates": [
+          {
+            "provider": "anthropic",
+            "name": "claude-opus-4-8",
+            "pinned": "claude-opus-4-8"
+          },
+          {
+            "provider": "anthropic",
+            "name": "claude-haiku-4-5",
+            "pinned": "claude-haiku-4-5-20251001"
+          }
+        ],
+        "optimizeFor": [
+          "quality",
+          "cost"
+        ],
+        "rules": [
+          {
+            "when": "construct_complexity == high",
+            "select": "claude-opus-4-8"
+          },
+          {
+            "when": "simple_1to1_mapping",
+            "select": "claude-haiku-4-5"
+          }
+        ],
+        "fallback": "claude-opus-4-8"
+      }
+    },
+    "generate": {
+      "id": "generate",
+      "kind": "task",
+      "parent": "modernization-orchestrator",
+      "data": {
+        "id": "generate",
+        "label": "Generate",
+        "description": "Emit target-native code (PySpark, target-dialect SQL/DDL) from the IR + mapping, for the selected cloud targets."
+      }
+    },
+    "tgt-databricks": {
+      "id": "tgt-databricks",
+      "kind": "system",
+      "parent": "generate",
+      "data": {
+        "id": "tgt-databricks",
+        "owner": "modernization-platform",
+        "version": "1.0.0",
+        "description": "Target: Databricks (PySpark, Delta Lake, Unity Catalog).",
+        "systemKind": "external-api",
+        "connection": "https://target-databricks/api/2.0",
+        "authScope": "tgt:write"
+      }
+    },
+    "tgt-snowflake": {
+      "id": "tgt-snowflake",
+      "kind": "system",
+      "parent": "generate",
+      "data": {
+        "id": "tgt-snowflake",
+        "owner": "modernization-platform",
+        "version": "1.0.0",
+        "description": "Target: Snowflake (SQL/DDL, Snowpark).",
+        "systemKind": "relational-db",
+        "connection": "snowflake://target-sf/account",
+        "authScope": "tgt:write"
+      }
+    },
+    "tgt-bigquery": {
+      "id": "tgt-bigquery",
+      "kind": "system",
+      "parent": "generate",
+      "data": {
+        "id": "tgt-bigquery",
+        "owner": "modernization-platform",
+        "version": "1.0.0",
+        "description": "Target: Google BigQuery.",
+        "systemKind": "relational-db",
+        "connection": "bigquery://target-gcp/dataset",
+        "authScope": "tgt:write"
+      }
+    },
+    "tgt-aurora": {
+      "id": "tgt-aurora",
+      "kind": "system",
+      "parent": "generate",
+      "data": {
+        "id": "tgt-aurora",
+        "owner": "modernization-platform",
+        "version": "1.0.0",
+        "description": "Target: AWS Aurora PostgreSQL.",
+        "systemKind": "relational-db",
+        "connection": "postgres://target-aurora:5432/app",
+        "authScope": "tgt:write"
+      }
+    },
+    "tgt-s3-lake": {
+      "id": "tgt-s3-lake",
+      "kind": "system",
+      "parent": "generate",
+      "data": {
+        "id": "tgt-s3-lake",
+        "owner": "modernization-platform",
+        "version": "1.0.0",
+        "description": "Target: AWS S3 data lake (Iceberg/Parquet).",
+        "systemKind": "document-store",
+        "connection": "s3://target-lake",
+        "authScope": "tgt:write"
+      }
+    },
+    "codegen-agent": {
+      "id": "codegen-agent",
+      "kind": "agent",
+      "parent": "generate",
+      "data": {
+        "id": "codegen-agent",
+        "owner": "modernization-platform",
+        "version": "1.0.0",
+        "responsibility": "Generate target-native code from the IR and the ratified mapping for the selected target.",
+        "model": {
+          "provider": "anthropic",
+          "name": "claude-opus-4-8",
+          "pinned": "claude-opus-4-8"
+        },
+        "refusalConditions": [
+          "Required source metadata is missing, or the conversion confidence is below threshold."
+        ],
+        "refusalEmits": "needs-review",
+        "telemetry": [
+          {
+            "name": "agent.generate.code",
+            "attributes": [
+              "status",
+              "confidence",
+              "duration_ms"
+            ]
+          }
+        ]
+      }
+    },
+    "emit-pyspark": {
+      "id": "emit-pyspark",
+      "kind": "tool",
+      "parent": "codegen-agent",
+      "data": {
+        "id": "emit-pyspark",
+        "owner": "modernization-platform",
+        "version": "1.0.0",
+        "description": "Emit PySpark/Delta code for the Databricks/lakehouse target.",
+        "effect": "write",
+        "authScope": "tgt:write"
+      }
+    },
+    "emit-sql": {
+      "id": "emit-sql",
+      "kind": "tool",
+      "parent": "codegen-agent",
+      "data": {
+        "id": "emit-sql",
+        "owner": "modernization-platform",
+        "version": "1.0.0",
+        "description": "Emit target-dialect SQL/DDL (Snowflake, BigQuery, Aurora).",
+        "effect": "write",
+        "authScope": "tgt:write"
+      }
+    },
+    "emit-ddl": {
+      "id": "emit-ddl",
+      "kind": "tool",
+      "parent": "codegen-agent",
+      "data": {
+        "id": "emit-ddl",
+        "owner": "modernization-platform",
+        "version": "1.0.0",
+        "description": "Generate target schema DDL from the mapping.",
+        "effect": "write",
+        "authScope": "tgt:write"
+      }
+    },
+    "conversion-batch-runner": {
+      "id": "conversion-batch-runner",
+      "kind": "job",
+      "parent": "generate",
+      "data": {
+        "id": "conversion-batch-runner",
+        "owner": "modernization-platform",
+        "version": "1.0.0",
+        "description": "Parallel, batched, resumable, checkpointed conversion across 50–80k+ objects.",
+        "queue": "conversion",
+        "trigger": "",
+        "timeoutSeconds": 3600,
+        "retries": 3
+      }
+    },
+    "validate": {
+      "id": "validate",
+      "kind": "task",
+      "parent": "modernization-orchestrator",
+      "data": {
+        "id": "validate",
+        "label": "Validate",
+        "description": "Check semantic equivalence between source behavior and generated target (logical-plan / row-count / sample-value / integrity); refuse to pass on failure."
+      }
+    },
+    "validation-agent": {
+      "id": "validation-agent",
+      "kind": "agent",
+      "parent": "validate",
+      "data": {
+        "id": "validation-agent",
+        "owner": "modernization-platform",
+        "version": "1.0.0",
+        "responsibility": "Verify semantic equivalence of generated target code against the source, and emit quality signals.",
+        "model": {
+          "provider": "anthropic",
+          "name": "claude-opus-4-8",
+          "pinned": "claude-opus-4-8"
+        },
+        "refusalConditions": [
+          "Required source metadata is missing, or the conversion confidence is below threshold."
+        ],
+        "refusalEmits": "needs-review",
+        "telemetry": [
+          {
+            "name": "agent.validate.equivalence",
+            "attributes": [
+              "status",
+              "confidence",
+              "duration_ms"
+            ]
+          }
+        ]
+      }
+    },
+    "equivalence-check": {
+      "id": "equivalence-check",
+      "kind": "tool",
+      "parent": "validation-agent",
+      "data": {
+        "id": "equivalence-check",
+        "owner": "modernization-platform",
+        "version": "1.0.0",
+        "description": "Compare source vs generated-target logical behavior.",
+        "effect": "read",
+        "authScope": "tgt:read"
+      }
+    },
+    "rowcount-reconcile": {
+      "id": "rowcount-reconcile",
+      "kind": "tool",
+      "parent": "validation-agent",
+      "data": {
+        "id": "rowcount-reconcile",
+        "owner": "modernization-platform",
+        "version": "1.0.0",
+        "description": "Reconcile row counts and sampled values source↔target.",
+        "effect": "read",
+        "authScope": "tgt:read"
+      }
+    },
+    "integrity-check": {
+      "id": "integrity-check",
+      "kind": "tool",
+      "parent": "validation-agent",
+      "data": {
+        "id": "integrity-check",
+        "owner": "modernization-platform",
+        "version": "1.0.0",
+        "description": "Verify constraints / referential integrity on the target.",
+        "effect": "read",
+        "authScope": "tgt:read"
+      }
+    },
+    "quality-signal-write": {
+      "id": "quality-signal-write",
+      "kind": "tool",
+      "parent": "validation-agent",
+      "data": {
+        "id": "quality-signal-write",
+        "owner": "modernization-platform",
+        "version": "1.0.0",
+        "description": "Record validation quality signals to the catalog.",
+        "effect": "write",
+        "authScope": "meta:write"
+      }
+    },
+    "review": {
+      "id": "review",
+      "kind": "task",
+      "parent": "modernization-orchestrator",
+      "data": {
+        "id": "review",
+        "label": "Review",
+        "description": "Route low-confidence or failed-validation objects to a human; accept, correct, or send back. Externalize state for resumability + audit."
+      }
+    },
+    "state-store": {
+      "id": "state-store",
+      "kind": "system",
+      "parent": "review",
+      "data": {
+        "id": "state-store",
+        "owner": "modernization-platform",
+        "version": "1.0.0",
+        "description": "Run/step state + checkpoints for resumable, auditable conversion runs.",
+        "systemKind": "state-store",
+        "connection": "redis://modernization-state:6379",
+        "authScope": "state:rw"
+      }
+    },
+    "audit-log": {
+      "id": "audit-log",
+      "kind": "system",
+      "parent": "review",
+      "data": {
+        "id": "audit-log",
+        "owner": "modernization-platform",
+        "version": "1.0.0",
+        "description": "Append-only audit trail: model selection, hops, decisions, outcomes.",
+        "systemKind": "document-store",
+        "connection": "s3://modernization/audit",
+        "authScope": "audit:write"
+      }
+    },
+    "review-router-agent": {
+      "id": "review-router-agent",
+      "kind": "agent",
+      "parent": "review",
+      "data": {
+        "id": "review-router-agent",
+        "owner": "modernization-platform",
+        "version": "1.0.0",
+        "responsibility": "Route low-confidence/failed conversions to a human reviewer and record the disposition.",
+        "model": {
+          "provider": "anthropic",
+          "name": "claude-haiku-4-5",
+          "pinned": "claude-haiku-4-5-20251001"
+        },
+        "refusalConditions": [
+          "Required source metadata is missing, or the conversion confidence is below threshold."
+        ],
+        "refusalEmits": "needs-review",
+        "telemetry": [
+          {
+            "name": "agent.review.route",
+            "attributes": [
+              "status",
+              "confidence",
+              "duration_ms"
+            ]
+          }
+        ]
+      }
+    },
+    "hitl-present": {
+      "id": "hitl-present",
+      "kind": "tool",
+      "parent": "review-router-agent",
+      "data": {
+        "id": "hitl-present",
+        "owner": "modernization-platform",
+        "version": "1.0.0",
+        "description": "Present a conversion + evidence for human approval (HITL gate).",
+        "effect": "external",
+        "authScope": "ui:write"
+      }
+    },
+    "disposition-record": {
+      "id": "disposition-record",
+      "kind": "tool",
+      "parent": "review-router-agent",
+      "data": {
+        "id": "disposition-record",
+        "owner": "modernization-platform",
+        "version": "1.0.0",
+        "description": "Record the reviewer decision + reason (the learning loop).",
+        "effect": "write",
+        "authScope": "meta:write"
+      }
+    },
+    "audit-logger": {
+      "id": "audit-logger",
+      "kind": "job",
+      "parent": "review",
+      "data": {
+        "id": "audit-logger",
+        "owner": "modernization-platform",
+        "version": "1.0.0",
+        "description": "Append run events to the audit log across the lifecycle.",
+        "queue": "audit",
+        "trigger": "",
+        "timeoutSeconds": 3600,
+        "retries": 3
+      }
+    }
+  },
+  "edges": [
+    {
+      "id": "e-discovery-agent-source-connect",
+      "source": "discovery-agent",
+      "target": "source-connect"
+    },
+    {
+      "id": "e-discovery-agent-dependency-map",
+      "source": "discovery-agent",
+      "target": "dependency-map"
+    },
+    {
+      "id": "e-discovery-agent-object-catalog-write",
+      "source": "discovery-agent",
+      "target": "object-catalog-write"
+    },
+    {
+      "id": "e-discovery-agent-src-oracle",
+      "source": "discovery-agent",
+      "target": "src-oracle"
+    },
+    {
+      "id": "e-discovery-agent-src-mssql",
+      "source": "discovery-agent",
+      "target": "src-mssql"
+    },
+    {
+      "id": "e-discovery-agent-src-db2",
+      "source": "discovery-agent",
+      "target": "src-db2"
+    },
+    {
+      "id": "e-discovery-agent-src-etl-graph",
+      "source": "discovery-agent",
+      "target": "src-etl-graph"
+    },
+    {
+      "id": "e-discovery-agent-src-etl-sql",
+      "source": "discovery-agent",
+      "target": "src-etl-sql"
+    },
+    {
+      "id": "e-discovery-agent-src-soa",
+      "source": "discovery-agent",
+      "target": "src-soa"
+    },
+    {
+      "id": "e-discovery-agent-src-flatfile",
+      "source": "discovery-agent",
+      "target": "src-flatfile"
+    },
+    {
+      "id": "e-parsing-agent-sql-parser",
+      "source": "parsing-agent",
+      "target": "sql-parser"
+    },
+    {
+      "id": "e-parsing-agent-etl-parser",
+      "source": "parsing-agent",
+      "target": "etl-parser"
+    },
+    {
+      "id": "e-parsing-agent-ir-write",
+      "source": "parsing-agent",
+      "target": "ir-write"
+    },
+    {
+      "id": "e-parsing-agent-ir-store",
+      "source": "parsing-agent",
+      "target": "ir-store"
+    },
+    {
+      "id": "e-mapping-agent-construct-map",
+      "source": "mapping-agent",
+      "target": "construct-map"
+    },
+    {
+      "id": "e-mapping-agent-lineage-trace",
+      "source": "mapping-agent",
+      "target": "lineage-trace"
+    },
+    {
+      "id": "e-mapping-agent-confidence-score",
+      "source": "mapping-agent",
+      "target": "confidence-score"
+    },
+    {
+      "id": "e-mapping-agent-metadata-catalog",
+      "source": "mapping-agent",
+      "target": "metadata-catalog"
+    },
+    {
+      "id": "e-mapping-agent-tool-registry",
+      "source": "mapping-agent",
+      "target": "tool-registry"
+    },
+    {
+      "id": "e-mapping-agent-conversion-model-router",
+      "source": "mapping-agent",
+      "target": "conversion-model-router"
+    },
+    {
+      "id": "e-codegen-agent-emit-pyspark",
+      "source": "codegen-agent",
+      "target": "emit-pyspark"
+    },
+    {
+      "id": "e-codegen-agent-emit-sql",
+      "source": "codegen-agent",
+      "target": "emit-sql"
+    },
+    {
+      "id": "e-codegen-agent-emit-ddl",
+      "source": "codegen-agent",
+      "target": "emit-ddl"
+    },
+    {
+      "id": "e-codegen-agent-tgt-databricks",
+      "source": "codegen-agent",
+      "target": "tgt-databricks"
+    },
+    {
+      "id": "e-codegen-agent-tgt-snowflake",
+      "source": "codegen-agent",
+      "target": "tgt-snowflake"
+    },
+    {
+      "id": "e-codegen-agent-tgt-bigquery",
+      "source": "codegen-agent",
+      "target": "tgt-bigquery"
+    },
+    {
+      "id": "e-codegen-agent-tgt-aurora",
+      "source": "codegen-agent",
+      "target": "tgt-aurora"
+    },
+    {
+      "id": "e-codegen-agent-tgt-s3-lake",
+      "source": "codegen-agent",
+      "target": "tgt-s3-lake"
+    },
+    {
+      "id": "e-validation-agent-equivalence-check",
+      "source": "validation-agent",
+      "target": "equivalence-check"
+    },
+    {
+      "id": "e-validation-agent-rowcount-reconcile",
+      "source": "validation-agent",
+      "target": "rowcount-reconcile"
+    },
+    {
+      "id": "e-validation-agent-integrity-check",
+      "source": "validation-agent",
+      "target": "integrity-check"
+    },
+    {
+      "id": "e-validation-agent-quality-signal-write",
+      "source": "validation-agent",
+      "target": "quality-signal-write"
+    },
+    {
+      "id": "e-review-router-agent-hitl-present",
+      "source": "review-router-agent",
+      "target": "hitl-present"
+    },
+    {
+      "id": "e-review-router-agent-disposition-record",
+      "source": "review-router-agent",
+      "target": "disposition-record"
+    },
+    {
+      "id": "e-review-router-agent-state-store",
+      "source": "review-router-agent",
+      "target": "state-store"
+    },
+    {
+      "id": "e-review-router-agent-audit-log",
+      "source": "review-router-agent",
+      "target": "audit-log"
+    }
+  ],
+  "subjectAreas": [
+    {
+      "id": "sa-discovery",
+      "name": "Discovery & Parsing",
+      "memberIds": [
+        "discover",
+        "parse"
+      ],
+      "hiddenIds": []
+    },
+    {
+      "id": "sa-mapping",
+      "name": "Mapping & Codegen",
+      "memberIds": [
+        "map",
+        "generate"
+      ],
+      "hiddenIds": []
+    },
+    {
+      "id": "sa-validation",
+      "name": "Validation & Review",
+      "memberIds": [
+        "validate",
+        "review"
+      ],
+      "hiddenIds": []
+    }
+  ]
+}
