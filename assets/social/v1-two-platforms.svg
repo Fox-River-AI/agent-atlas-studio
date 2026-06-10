@@ -1,0 +1,120 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="1200" viewBox="0 0 1200 1200" font-family="Georgia, 'Times New Roman', serif">
+  <!-- palette: cream bg #F2EDE4, navy #0E2233, rust #C0532B, muted #6B7177 -->
+  <rect width="1200" height="1200" fill="#F2EDE4"/>
+
+  <!-- eyebrow -->
+  <text x="90" y="150" font-family="Helvetica, Arial, sans-serif" font-size="30" letter-spacing="7" font-weight="700" fill="#C0532B">TWO KINDS OF AGENT PLATFORM</text>
+  <rect x="90" y="170" width="300" height="4" fill="#C0532B"/>
+
+  <!-- headline -->
+  <text x="88" y="270" font-size="74" font-weight="700" fill="#0E2233">One you can hold in</text>
+  <text x="88" y="350" font-size="74" font-weight="700" fill="#0E2233">your head. <tspan fill="#C0532B" font-style="italic">One you can't.</tspan></text>
+
+  <!-- subhead -->
+  <text x="90" y="412" font-family="Helvetica, Arial, sans-serif" font-size="30" fill="#6B7177">Same discipline that saves one will bury the other.</text>
+
+  <!-- ===================== PANEL LABELS ===================== -->
+  <text x="90" y="510" font-family="Helvetica, Arial, sans-serif" font-size="34" letter-spacing="3" font-weight="700" fill="#0E2233">PLATFORM A</text>
+  <text x="700" y="510" font-family="Helvetica, Arial, sans-serif" font-size="34" letter-spacing="3" font-weight="700" fill="#0E2233">PLATFORM B</text>
+
+  <!-- center divider -->
+  <line x1="600" y1="540" x2="600" y2="1010" stroke="#C0532B" stroke-width="2" stroke-dasharray="3 9"/>
+  <circle cx="600" cy="775" r="30" fill="#F2EDE4" stroke="#C0532B" stroke-width="2"/>
+  <text x="600" y="784" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="22" font-style="italic" fill="#C0532B">vs</text>
+
+  <!-- ===================== PANEL A: tidy, ~5 nodes ===================== -->
+  <!-- orderly small cluster, lots of whitespace -->
+  <g stroke="#0E2233" stroke-width="2.5" fill="none">
+    <line x1="250" y1="640" x2="170" y2="760"/>
+    <line x1="250" y1="640" x2="330" y2="760"/>
+    <line x1="170" y1="760" x2="250" y2="880"/>
+    <line x1="330" y1="760" x2="250" y2="880"/>
+  </g>
+  <g>
+    <circle cx="250" cy="640" r="26" fill="#0E2233"/>
+    <circle cx="170" cy="760" r="26" fill="#0E2233"/>
+    <circle cx="330" cy="760" r="26" fill="#0E2233"/>
+    <circle cx="250" cy="880" r="26" fill="#0E2233"/>
+    <circle cx="250" cy="760" r="26" fill="#C0532B"/>
+  </g>
+  <!-- calm checkmark -->
+  <circle cx="430" cy="640" r="22" fill="none" stroke="#3C7d52" stroke-width="3"/>
+  <path d="M420 640 l7 8 l13 -17" stroke="#3C7d52" stroke-width="4" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+
+  <text x="90" y="960" font-family="Helvetica, Arial, sans-serif" font-size="27" font-weight="700" fill="#0E2233">~5 agents · one builder</text>
+  <text x="90" y="998" font-family="Helvetica, Arial, sans-serif" font-size="25" fill="#3C7d52">YAML is enough. You don't need a tool.</text>
+
+  <!-- ===================== PANEL B: sprawl, 30+ nodes, dupes, off-frame ===================== -->
+  <!-- chaotic edges -->
+  <g stroke="#0E2233" stroke-width="1.6" fill="none" opacity="0.55">
+    <line x1="720" y1="600" x2="830" y2="660"/>
+    <line x1="830" y1="660" x2="760" y2="740"/>
+    <line x1="830" y1="660" x2="940" y2="630"/>
+    <line x1="940" y1="630" x2="1010" y2="710"/>
+    <line x1="760" y1="740" x2="870" y2="800"/>
+    <line x1="870" y1="800" x2="980" y2="770"/>
+    <line x1="980" y1="770" x2="1080" y2="830"/>
+    <line x1="940" y1="630" x2="1060" y2="600"/>
+    <line x1="1010" y1="710" x2="1110" y2="680"/>
+    <line x1="870" y1="800" x2="800" y2="900"/>
+    <line x1="800" y1="900" x2="910" y2="950"/>
+    <line x1="910" y1="950" x2="1020" y2="910"/>
+    <line x1="980" y1="770" x2="1050" y2="880"/>
+    <line x1="1020" y1="910" x2="1120" y2="950"/>
+    <line x1="760" y1="740" x2="700" y2="850"/>
+    <line x1="700" y1="850" x2="800" y2="900"/>
+    <line x1="1060" y1="600" x2="1150" y2="560"/>
+    <line x1="1080" y1="830" x2="1170" y2="800"/>
+    <line x1="1110" y1="680" x2="1180" y2="640"/>
+    <line x1="910" y1="950" x2="870" y2="1030"/>
+    <line x1="1050" y1="880" x2="1110" y2="970"/>
+  </g>
+  <!-- nodes (navy) -->
+  <g fill="#0E2233">
+    <circle cx="720" cy="600" r="16"/>
+    <circle cx="830" cy="660" r="16"/>
+    <circle cx="760" cy="740" r="16"/>
+    <circle cx="940" cy="630" r="16"/>
+    <circle cx="1010" cy="710" r="16"/>
+    <circle cx="870" cy="800" r="16"/>
+    <circle cx="1060" cy="600" r="16"/>
+    <circle cx="700" cy="850" r="16"/>
+    <circle cx="800" cy="900" r="16"/>
+    <circle cx="910" cy="950" r="16"/>
+    <circle cx="1050" cy="880" r="16"/>
+    <circle cx="1020" cy="910" r="16"/>
+    <!-- edge-of-frame nodes (cut off => "keeps going") -->
+    <circle cx="1150" cy="560" r="16"/>
+    <circle cx="1180" cy="640" r="16"/>
+    <circle cx="1170" cy="800" r="16"/>
+    <circle cx="1120" cy="950" r="16"/>
+    <circle cx="870" cy="1030" r="16"/>
+    <circle cx="1110" cy="970" r="16"/>
+  </g>
+  <!-- DUPLICATE nodes, rust + dashed ring => the redundancy made literal -->
+  <g>
+    <circle cx="980" cy="770" r="18" fill="#C0532B"/>
+    <circle cx="980" cy="770" r="26" fill="none" stroke="#C0532B" stroke-width="2" stroke-dasharray="3 4"/>
+    <circle cx="1010" cy="710" r="18" fill="#C0532B"/>
+    <circle cx="1010" cy="710" r="26" fill="none" stroke="#C0532B" stroke-width="2" stroke-dasharray="3 4"/>
+  </g>
+  <text x="1006" y="668" font-family="Helvetica, Arial, sans-serif" font-size="19" font-style="italic" fill="#C0532B">same connector, built twice</text>
+
+  <!-- arrows trailing off-frame to signal unbounded growth -->
+  <g stroke="#C0532B" stroke-width="2" fill="none" opacity="0.8">
+    <line x1="1150" y1="560" x2="1200" y2="540"/>
+    <line x1="1180" y1="640" x2="1200" y2="648"/>
+    <line x1="1170" y1="800" x2="1200" y2="792"/>
+    <line x1="1120" y1="950" x2="1200" y2="980"/>
+  </g>
+
+  <rect x="680" y="930" width="470" height="80" fill="#F2EDE4" opacity="0.85"/>
+  <text x="700" y="962" font-family="Helvetica, Arial, sans-serif" font-size="27" font-weight="700" fill="#0E2233">30+ agents · many builders</text>
+  <text x="700" y="1000" font-family="Helvetica, Arial, sans-serif" font-size="25" fill="#C0532B">No owner. No record. It keeps growing.</text>
+
+  <!-- ===================== FOOTER ===================== -->
+  <line x1="90" y1="1060" x2="1110" y2="1060" stroke="#0E2233" stroke-width="2"/>
+  <text x="90" y="1125" font-size="46" font-weight="700" fill="#0E2233">Agent Atlas</text>
+  <rect x="1086" y="1098" width="24" height="24" fill="#C0532B"/>
+  <text x="90" y="1162" font-family="Helvetica, Arial, sans-serif" font-size="26" fill="#6B7177">model the fleet · validate live · export the registry · free to fork</text>
+</svg>
