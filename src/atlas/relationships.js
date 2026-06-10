@@ -1,14 +1,23 @@
 // Which object kinds may connect to which (source → target). The model enforces
-// these so you can't draw a nonsensical relationship (e.g. Task → System).
+// these so you can't draw a nonsensical relationship (e.g. Tool → Agent).
 //
-// - A Task contains Agents (the agents that carry it out).
-// - An Agent uses Tools, dispatches Jobs, routes via a Router, and connects to
-//   Systems (datastores).
+// Hierarchy:
+// - Orchestrator contains Tasks (the only thing directly under the root).
+// - A Task contains the Agents that carry it out, and may sequence other Tasks.
+//   A Task may ALSO hold stage-level shared infrastructure: Systems shared across
+//   the stage's agents (a metadata catalog, a state store) and Jobs the workflow/
+//   orchestrator dispatches (a nightly batch run no single agent owns).
+// - An Agent uses Tools, dispatches its own Jobs, routes via a Router (its dynamic
+//   model selector), and connects to the Systems it touches.
+// - Job parent rule (dispatcher decides): agent-dispatched Job → under the Agent;
+//   workflow/orchestrator-dispatched Job → under the Task.
+// - System parent: the owning Agent, OR the Task when the datastore is shared
+//   across the stage.
+// - Router belongs to exactly one Agent (it selects THAT agent's model) — Agent only.
 // - Tools, Jobs, Systems, Routers are LEAVES — no outgoing relationships.
-// - Tasks may sequence other Tasks (task-level order).
 export const ALLOWED_TARGETS = {
   orchestrator: new Set(['task']),
-  task: new Set(['agent', 'task']),
+  task: new Set(['agent', 'task', 'system', 'job']),
   agent: new Set(['tool', 'job', 'router', 'system']),
   tool: new Set([]),
   job: new Set([]),
