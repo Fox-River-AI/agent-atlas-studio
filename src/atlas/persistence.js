@@ -49,6 +49,8 @@ function normalize(data) {
     subjectAreas,
     layouts: data.layouts || {},
     viewports: data.viewports || {},
+    // Requirements doc (DIAG-38): { name, text } or null. Older saves lack it.
+    requirements: data.requirements && typeof data.requirements === 'object' ? data.requirements : null,
   };
 }
 
