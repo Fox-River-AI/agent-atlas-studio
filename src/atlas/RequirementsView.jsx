@@ -8,6 +8,35 @@ import React, { useState, useEffect, useRef } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 
+const FILL_RE = /«FILL:[^»]*»/g;
+
+// Turn react-markdown text children into React nodes where each «FILL: …» token
+// becomes a highlighted, id'd chip (fill-0, fill-1, … in document order) so the
+// blanks are unmissable in Preview and "Next blank" can scroll to one. A render-
+// scoped counter keeps the ids stable per render. We only wrap STRING children;
+// already-rendered nodes (bold, links) pass through untouched.
+function makeChipComponents(counter) {
+  const wrap = (children) =>
+    React.Children.map(children, (child) => {
+      if (typeof child !== 'string' || !child.includes('«FILL:')) return child;
+      const out = [];
+      let last = 0, m;
+      FILL_RE.lastIndex = 0;
+      while ((m = FILL_RE.exec(child))) {
+        if (m.index > last) out.push(child.slice(last, m.index));
+        const id = `fill-${counter.n++}`;
+        // Show "FILL: <what> — <suggested>" compactly inside the chip.
+        const inner = m[0].replace(/^«FILL:\s*/, '').replace(/»$/, '');
+        out.push(<span key={id} id={id} className="atlas-fill-chip" title="Replace this in Edit mode">{inner}</span>);
+        last = m.index + m[0].length;
+      }
+      if (last < child.length) out.push(child.slice(last));
+      return out;
+    });
+  const C = (Tag) => ({ children, ...props }) => <Tag {...props}>{wrap(children)}</Tag>;
+  return { p: C('p'), li: C('li'), td: C('td'), th: C('th'), h3: C('h3'), h4: C('h4'), em: C('em'), strong: C('strong') };
+}
+
 export default function RequirementsView({
   requirements,       // { name, text } | null
   onCreate,           // (name) => void   — create the single project
@@ -24,33 +53,31 @@ export default function RequirementsView({
   const [err, setErr] = useState(null);
   const [mode, setMode] = useState('edit'); // 'edit' | 'preview'
   const [elapsed, setElapsed] = useState(0); // seconds the current op has run
-  const docRef = useRef(null); // the editor textarea, for "next blank" navigation
+  const docRef = useRef(null); // the editor textarea
+  const cursor = useRef(0);    // which blank index "Next blank" should go to
 
-  // Count of unfilled «FILL: …» tokens, and a jump-to-next helper.
+  // Count of unfilled «FILL: …» tokens. A textarea can't reliably highlight, so
+  // "Next blank" jumps to the highlighted CHIP in Preview (where we control the
+  // markup) and flashes it.
   const text = requirements?.text || '';
-  const fillCount = (text.match(/«FILL:/g) || []).length;
+  const fillCount = (text.match(/«FILL:[^»]*»/g) || []).length;
   const nextBlank = () => {
-    const ta = docRef.current;
-    if (!ta) return;
-    setMode('edit');
-    // Find the next «FILL:…» at/after the cursor; wrap to the top if none ahead.
-    const from = (ta.selectionEnd || 0);
-    const re = /«FILL:[^»]*»/g;
-    let m, first = null, hit = null;
-    while ((m = re.exec(text))) {
-      if (first === null) first = m;
-      if (m.index >= from) { hit = m; break; }
-    }
-    const target = hit || first;
-    if (!target) return;
-    // Defer so the textarea is focused/rendered before we set the selection.
+    if (fillCount === 0) return;
+    setMode('preview');
+    const idx = cursor.current % fillCount;
+    cursor.current = idx + 1; // advance for the next press (wraps)
     requestAnimationFrame(() => {
-      ta.focus();
-      ta.setSelectionRange(target.index, target.index + target[0].length);
-      // Scroll the selection into view (textarea has no scrollIntoView for ranges).
-      const before = text.slice(0, target.index);
-      const line = before.split('\n').length;
-      ta.scrollTop = Math.max(0, (line - 4) * 18);
+      // give Preview a tick to render, then scroll + flash the chip
+      requestAnimationFrame(() => {
+        const el = document.getElementById(`fill-${idx}`);
+        if (el) {
+          el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          el.classList.remove('flash');
+          // reflow so re-adding the class restarts the animation
+          void el.offsetWidth;
+          el.classList.add('flash');
+        }
+      });
     });
   };
   const tick = useRef(null);
@@ -260,8 +287,9 @@ export default function RequirementsView({
           )}
           <p className="atlas-review-foot">
             “Apply” appends the suggested declaration into your document under
-            <strong> Governance — to declare</strong>. Fill each &lt;…&gt; with a real value, then
-            Generate — the model only fills governance the document states.
+            <strong> Governance — to declare</strong>. Each blank shows as a highlighted chip in
+            Preview — use <strong>Next blank →</strong> to step through them, fill each in Edit,
+            then Generate. The model only fills governance the document states.
           </p>
         </div>
       )}
@@ -278,7 +306,9 @@ export default function RequirementsView({
       ) : (
         <div className="atlas-reqview-preview">
           {requirements.text?.trim() ? (
-            <ReactMarkdown remarkPlugins={[remarkGfm]}>{requirements.text}</ReactMarkdown>
+            <ReactMarkdown remarkPlugins={[remarkGfm]} components={makeChipComponents({ n: 0 })}>
+              {requirements.text}
+            </ReactMarkdown>
           ) : (
             <p className="atlas-empty">Nothing to preview yet — switch to Edit and write the document.</p>
           )}
