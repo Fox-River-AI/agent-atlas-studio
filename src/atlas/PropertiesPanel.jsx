@@ -12,6 +12,61 @@ function Field({ label, hint, children }) {
   );
 }
 
+// Common regimes (model-level) and data classes (per-object). Free-text entry is
+// also allowed via the "+ other" inputs, so this list is a convenience, not a cap.
+export const COMPLIANCE_REGIMES = ['HIPAA', 'SOC 2', 'PCI-DSS', 'GDPR', 'FedRAMP', 'EU AI Act', 'HITRUST', 'ISO 27001'];
+const DATA_TAGS = ['PHI', 'PII', 'PCI', 'PFI', 'IP', 'none'];
+
+// Reusable per-object governance controls (NIST AI RMF: privacy/security/
+// accountability). Regime-neutral — the control is declared here; the standard is
+// named by data_tags + the model-level compliance_regimes. Edits the `governance`
+// sub-object. Rendered for every manifest kind (not task).
+function GovernanceFields({ g, setG }) {
+  const tags = g.data_tags || [];
+  const toggleTag = (t) => setG({ ...g, data_tags: tags.includes(t) ? tags.filter((x) => x !== t) : [...tags, t] });
+  return (
+    <fieldset className="atlas-group">
+      <legend>governance — privacy & trust</legend>
+      <Field label="data classification" hint="sensitivity of the data this object touches">
+        <select value={g.data_classification || ''} onChange={(e) => setG({ ...g, data_classification: e.target.value })}>
+          <option value="">— not set —</option>
+          <option value="public">public</option>
+          <option value="internal">internal</option>
+          <option value="confidential">confidential</option>
+          <option value="regulated">regulated</option>
+        </select>
+      </Field>
+      <Field label="data tags" hint="regulatory data classes — MULTIPLE may apply (e.g. PHI + PII)">
+        <div className="atlas-checkset">
+          {DATA_TAGS.map((t) => (
+            <label key={t} className="atlas-check">
+              <input type="checkbox" checked={tags.includes(t)} onChange={() => toggleTag(t)} />{t}
+            </label>
+          ))}
+        </div>
+      </Field>
+      <Field label="residency" hint="'on-prem' = data never leaves the boundary (the local-inference trust model)">
+        <select value={g.residency || ''} onChange={(e) => setG({ ...g, residency: e.target.value })}>
+          <option value="">— not set —</option>
+          <option value="any">any</option>
+          <option value="in-region">in-region</option>
+          <option value="on-prem">on-prem</option>
+        </select>
+      </Field>
+      <Field label="retention" hint="e.g. 7y, 30d, none (optional)">
+        <input value={g.retention || ''} onChange={(e) => setG({ ...g, retention: e.target.value })} placeholder="7y" />
+      </Field>
+      <Field label="redaction" hint="fields to filter/redact before telemetry is indexed — comma-separated (so observability isn't a compliance liability)">
+        <input
+          value={(g.redaction || []).join(', ')}
+          onChange={(e) => setG({ ...g, redaction: e.target.value.split(',').map((s) => s.trim()).filter(Boolean) })}
+          placeholder="prompt, completion, patient_id"
+        />
+      </Field>
+    </fieldset>
+  );
+}
+
 // Mirrors the left pane's "MODEL ⟨" header — an orange title + collapse control,
 // here labelled "Properties ⟩" (collapses to the right).
 function PanelHead({ title, dirty, onCollapse, children }) {
@@ -149,6 +204,24 @@ export default function PropertiesPanel({ node, onChange, errors, idError, dirty
               placeholder="category, urgency, confidence"
             />
           </Field>
+
+          <fieldset className="atlas-group">
+            <legend>governance — controls (NIST Govern)</legend>
+            <Field label="prohibited tools" hint="NEGATIVE list: tool ids this agent must NEVER call (one per line). Conformance flags any runtime call to these. Distinct from the allowlist (the edges to tools).">
+              <textarea
+                value={(d.prohibitedTools || []).join('\n')}
+                onChange={(e) => set({ prohibitedTools: e.target.value.split('\n').map((s) => s.trim()).filter(Boolean) })}
+                rows={2}
+                placeholder={'tool-external-send\ntool-bigquery-emitter'}
+              />
+            </Field>
+            <Field label="grounding threshold" hint="0–1. Refuse rather than answer when grounding/confidence is below this (e.g. 0.95 for regulated domains). Leave blank if not specified.">
+              <input type="number" min="0" max="1" step="0.01" value={d.groundingThreshold ?? ''} onChange={(e) => set({ groundingThreshold: e.target.value })} placeholder="0.95" />
+            </Field>
+            <Field label="escalation to" hint="id of the System/Job/queue this agent escalates to on refusal/low confidence (optional)">
+              <input value={d.escalationTo || ''} onChange={(e) => set({ escalationTo: e.target.value.toLowerCase() })} placeholder="hitl-review-queue" />
+            </Field>
+          </fieldset>
         </>
       )}
 
@@ -290,7 +363,30 @@ export default function PropertiesPanel({ node, onChange, errors, idError, dirty
           <Field label="state store" hint="id of a System (kind=state-store) for run/step state">
             <input value={d.stateStore || ''} onChange={(e) => set({ stateStore: e.target.value })} placeholder="run-state" />
           </Field>
+          <fieldset className="atlas-group">
+            <legend>compliance regimes (model-level)</legend>
+            <p className="atlas-field-hint">Which standards this whole system claims to satisfy. System-governing regimes live here; per-object data classes (PHI/PII/PCI) go in each object's Governance.</p>
+            <div className="atlas-checkset">
+              {COMPLIANCE_REGIMES.map((r) => {
+                const on = (d.complianceRegimes || []).includes(r);
+                return (
+                  <label key={r} className="atlas-check">
+                    <input type="checkbox" checked={on}
+                      onChange={() => set({ complianceRegimes: on ? d.complianceRegimes.filter((x) => x !== r) : [...(d.complianceRegimes || []), r] })} />
+                    {r}
+                  </label>
+                );
+              })}
+            </div>
+          </fieldset>
         </>
+      )}
+
+      {node.type !== 'task' && (
+        <GovernanceFields
+          g={d.governance || {}}
+          setG={(g) => set({ governance: g })}
+        />
       )}
 
       {errors && errors.length > 0 && (

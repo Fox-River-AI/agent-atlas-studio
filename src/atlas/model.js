@@ -6,6 +6,21 @@ import yaml from 'js-yaml';
 import { VALIDATORS, formatErrors, agentSchema, toolSchema, jobSchema, systemSchema, routerSchema, orchestratorSchema } from './schema';
 import { GOVERNANCE_FILES } from './governance';
 
+// Emit the governance block ONLY when something is actually declared, so an
+// object with no governance stays clean in the manifest (declare-or-flag: we
+// never write empty/default governance as if it were a real declaration).
+function governanceBlock(d) {
+  const g = d.governance;
+  if (!g || typeof g !== 'object') return undefined;
+  const out = {};
+  if (g.data_classification) out.data_classification = g.data_classification;
+  if (Array.isArray(g.data_tags) && g.data_tags.filter(Boolean).length) out.data_tags = g.data_tags.filter(Boolean);
+  if (g.residency) out.residency = g.residency;
+  if (g.retention) out.retention = g.retention;
+  if (Array.isArray(g.redaction) && g.redaction.filter(Boolean).length) out.redaction = g.redaction.filter(Boolean);
+  return Object.keys(out).length ? out : undefined;
+}
+
 // Edges encode "agent allowlists tool": source = agent node, target = tool node.
 export function toolsForAgent(agentId, nodes, edges) {
   const toolIds = new Set();
@@ -73,6 +88,10 @@ export function agentManifest(node, nodes, edges) {
         ...(t.attributes && t.attributes.length ? { attributes: t.attributes } : {}),
       })),
     },
+    ...(Array.isArray(d.prohibitedTools) && d.prohibitedTools.filter(Boolean).length ? { prohibited_tools: d.prohibitedTools.filter(Boolean) } : {}),
+    ...(d.groundingThreshold != null && d.groundingThreshold !== '' ? { grounding_threshold: Number(d.groundingThreshold) } : {}),
+    ...(d.escalationTo ? { escalation_to: d.escalationTo } : {}),
+    ...(governanceBlock(d) ? { governance: governanceBlock(d) } : {}),
   };
 }
 
@@ -89,6 +108,7 @@ export function toolManifest(node, nodes, edges) {
     auth: { scope: d.authScope || '' },
     ...(d.ratePerMinute ? { rate_limit: { per_minute: Number(d.ratePerMinute) } } : {}),
     reused_by: agentsUsingTool(d.id, nodes, edges),
+    ...(governanceBlock(d) ? { governance: governanceBlock(d) } : {}),
   };
 }
 
@@ -105,6 +125,7 @@ export function jobManifest(node) {
     ...(d.trigger ? { trigger: d.trigger } : {}),
     ...(d.timeoutSeconds ? { timeout_seconds: Number(d.timeoutSeconds) } : {}),
     ...(d.retries != null && d.retries !== '' ? { retries: Number(d.retries) } : {}),
+    ...(governanceBlock(d) ? { governance: governanceBlock(d) } : {}),
   };
 }
 
@@ -120,6 +141,7 @@ export function systemManifest(node) {
     systemKind: d.systemKind || 'other',
     ...(d.connection ? { connection: d.connection } : {}),
     ...(d.authScope ? { auth: { scope: d.authScope } } : {}),
+    ...(governanceBlock(d) ? { governance: governanceBlock(d) } : {}),
   };
 }
 
@@ -142,6 +164,7 @@ export function routerManifest(node) {
       ...(d.rules && d.rules.length ? { rules: d.rules.filter((r) => r.when && r.select) } : {}),
       fallback: d.fallback || '',
     },
+    ...(governanceBlock(d) ? { governance: governanceBlock(d) } : {}),
   };
 }
 
@@ -156,6 +179,8 @@ export function orchestratorManifest(node) {
     ...(d.description ? { description: d.description } : {}),
     control_flow: d.controlFlow || 'dag',
     ...(d.stateStore ? { state_store: d.stateStore } : {}),
+    ...(Array.isArray(d.complianceRegimes) && d.complianceRegimes.filter(Boolean).length ? { compliance_regimes: d.complianceRegimes.filter(Boolean) } : {}),
+    ...(governanceBlock(d) ? { governance: governanceBlock(d) } : {}),
   };
 }
 
