@@ -15,7 +15,7 @@ const FILL_RE = /«FILL:[^»]*»/g;
 // blanks are unmissable in Preview and "Next blank" can scroll to one. A render-
 // scoped counter keeps the ids stable per render. We only wrap STRING children;
 // already-rendered nodes (bold, links) pass through untouched.
-function makeChipComponents(counter) {
+function makeChipComponents(counter, onChipClick) {
   const wrap = (children) =>
     React.Children.map(children, (child) => {
       if (typeof child !== 'string' || !child.includes('«FILL:')) return child;
@@ -24,10 +24,16 @@ function makeChipComponents(counter) {
       FILL_RE.lastIndex = 0;
       while ((m = FILL_RE.exec(child))) {
         if (m.index > last) out.push(child.slice(last, m.index));
-        const id = `fill-${counter.n++}`;
+        const idx = counter.n++;
+        const id = `fill-${idx}`;
         // Show "FILL: <what> — <suggested>" compactly inside the chip.
         const inner = m[0].replace(/^«FILL:\s*/, '').replace(/»$/, '');
-        out.push(<span key={id} id={id} className="atlas-fill-chip" title="Replace this in Edit mode">{inner}</span>);
+        out.push(
+          <span key={id} id={id} className="atlas-fill-chip" role="button" tabIndex={0}
+            title="Click to edit this blank" onClick={() => onChipClick(idx)}>
+            {inner}
+          </span>
+        );
         last = m.index + m[0].length;
       }
       if (last < child.length) out.push(child.slice(last));
@@ -53,19 +59,32 @@ export default function RequirementsView({
   const [err, setErr] = useState(null);
   const [mode, setMode] = useState('edit'); // 'edit' | 'preview'
   const [elapsed, setElapsed] = useState(0); // seconds the current op has run
-  const docRef = useRef(null); // the editor textarea
-  const cursor = useRef(0);    // which blank index "Next blank" should go to
+  const docRef = useRef(null);       // the editor textarea
+  const cursor = useRef(0);          // which blank index "Next blank" should go to
+  const pendingEditSel = useRef(null); // [start,end] char offsets to restore when Edit re-mounts
 
   // Count of unfilled «FILL: …» tokens. A textarea can't reliably highlight, so
   // "Next blank" jumps to the highlighted CHIP in Preview (where we control the
   // markup) and flashes it.
   const text = requirements?.text || '';
   const fillCount = (text.match(/«FILL:[^»]*»/g) || []).length;
+  // Character offset of the Nth «FILL» token in the raw text (for Edit scroll).
+  const fillOffsetAt = (n) => {
+    const re = /«FILL:[^»]*»/g; let m, i = 0;
+    while ((m = re.exec(text))) { if (i === n) return [m.index, m.index + m[0].length]; i++; }
+    return null;
+  };
+  // Click a chip in Preview → jump to Edit at that blank, token selected.
+  const editBlank = (idx) => {
+    pendingEditSel.current = fillOffsetAt(idx);
+    setMode('edit');
+  };
   const nextBlank = () => {
     if (fillCount === 0) return;
     setMode('preview');
     const idx = cursor.current % fillCount;
     cursor.current = idx + 1; // advance for the next press (wraps)
+    pendingEditSel.current = fillOffsetAt(idx); // so switching to Edit lands here, not at top
     requestAnimationFrame(() => {
       // give Preview a tick to render, then scroll + flash the chip
       requestAnimationFrame(() => {
@@ -93,6 +112,28 @@ export default function RequirementsView({
   }, [working]);
 
   const fmtElapsed = (s) => (s < 60 ? `${s}s` : `${Math.floor(s / 60)}m ${String(s % 60).padStart(2, '0')}s`);
+
+  // When Edit re-mounts the textarea (e.g. coming back from Preview via Next blank),
+  // restore the selection/scroll to the blank we were looking at — otherwise the
+  // fresh textarea starts at the top and you lose your place. One-shot per request.
+  useEffect(() => {
+    if (mode !== 'edit') return;
+    const sel = pendingEditSel.current;
+    if (!sel) return;
+    pendingEditSel.current = null;
+    const ta = docRef.current;
+    if (!ta) return;
+    requestAnimationFrame(() => {
+      ta.focus();
+      ta.setSelectionRange(sel[0], sel[1]);
+      // Scroll so the selection sits roughly centered (textarea can't scrollIntoView a range).
+      const cs = window.getComputedStyle(ta);
+      const lh = parseFloat(cs.lineHeight) || 18;
+      const line = text.slice(0, sel[0]).split('\n').length;
+      const visibleLines = Math.max(1, Math.floor(ta.clientHeight / lh));
+      ta.scrollTop = Math.max(0, (line - Math.floor(visibleLines / 2)) * lh);
+    });
+  }, [mode]);
 
   const importFile = async (e) => {
     const f = e.target.files?.[0];
@@ -287,9 +328,10 @@ export default function RequirementsView({
           )}
           <p className="atlas-review-foot">
             “Apply” appends the suggested declaration into your document under
-            <strong> Governance — to declare</strong>. Each blank shows as a highlighted chip in
-            Preview — use <strong>Next blank →</strong> to step through them, fill each in Edit,
-            then Generate. The model only fills governance the document states.
+            <strong> Governance — to declare</strong>. Each blank shows as a yellow chip in
+            Preview — <strong>click a chip</strong> (or use <strong>Next blank →</strong>) to jump
+            to it in Edit with the token selected; type your value, then Generate. The model only
+            fills governance the document states.
           </p>
         </div>
       )}
@@ -306,7 +348,7 @@ export default function RequirementsView({
       ) : (
         <div className="atlas-reqview-preview">
           {requirements.text?.trim() ? (
-            <ReactMarkdown remarkPlugins={[remarkGfm]} components={makeChipComponents({ n: 0 })}>
+            <ReactMarkdown remarkPlugins={[remarkGfm]} components={makeChipComponents({ n: 0 }, editBlank)}>
               {requirements.text}
             </ReactMarkdown>
           ) : (
