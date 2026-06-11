@@ -24,6 +24,35 @@ export default function RequirementsView({
   const [err, setErr] = useState(null);
   const [mode, setMode] = useState('edit'); // 'edit' | 'preview'
   const [elapsed, setElapsed] = useState(0); // seconds the current op has run
+  const docRef = useRef(null); // the editor textarea, for "next blank" navigation
+
+  // Count of unfilled «FILL: …» tokens, and a jump-to-next helper.
+  const text = requirements?.text || '';
+  const fillCount = (text.match(/«FILL:/g) || []).length;
+  const nextBlank = () => {
+    const ta = docRef.current;
+    if (!ta) return;
+    setMode('edit');
+    // Find the next «FILL:…» at/after the cursor; wrap to the top if none ahead.
+    const from = (ta.selectionEnd || 0);
+    const re = /«FILL:[^»]*»/g;
+    let m, first = null, hit = null;
+    while ((m = re.exec(text))) {
+      if (first === null) first = m;
+      if (m.index >= from) { hit = m; break; }
+    }
+    const target = hit || first;
+    if (!target) return;
+    // Defer so the textarea is focused/rendered before we set the selection.
+    requestAnimationFrame(() => {
+      ta.focus();
+      ta.setSelectionRange(target.index, target.index + target[0].length);
+      // Scroll the selection into view (textarea has no scrollIntoView for ranges).
+      const before = text.slice(0, target.index);
+      const line = before.split('\n').length;
+      ta.scrollTop = Math.max(0, (line - 4) * 18);
+    });
+  };
   const tick = useRef(null);
 
   // While generating OR reviewing, tick a once-a-second elapsed counter so the
@@ -135,6 +164,12 @@ export default function RequirementsView({
           aria-label="Requirements project name"
         />
         <div className="atlas-reqview-headactions">
+          {fillCount > 0 && (
+            <button className="atlas-reqview-nextblank" onClick={nextBlank}
+              title="Jump to the next «FILL: …» blank to fill in">
+              Next blank → <span className="atlas-fill-count">{fillCount}</span>
+            </button>
+          )}
           <div className="atlas-reqview-modes" role="tablist" aria-label="Document view">
             <button
               role="tab"
@@ -233,6 +268,7 @@ export default function RequirementsView({
 
       {mode === 'edit' ? (
         <textarea
+          ref={docRef}
           className="atlas-reqview-doc"
           value={requirements.text}
           onChange={(e) => onChangeText(e.target.value)}

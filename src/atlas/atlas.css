@@ -630,6 +630,18 @@
 }
 .atlas-reqview-foot { padding: 0.4rem 1rem; font-size: 0.8rem; color: var(--text-dim); border-top: 1px solid var(--border-soft); }
 
+/* Next-blank navigation (jump to next «FILL: …») */
+.atlas-reqview-nextblank {
+  display: inline-flex; align-items: center; gap: 0.4rem;
+  background: transparent; color: var(--accent); border: 1px solid var(--accent);
+  border-radius: 6px; padding: 0.25rem 0.6rem; font-size: 0.82rem; font-weight: 600; cursor: pointer;
+}
+.atlas-reqview-nextblank:hover { background: var(--bg-elevated); }
+.atlas-fill-count {
+  background: var(--accent); color: var(--accent-fg); border-radius: 10px;
+  padding: 0 0.4rem; font-size: 0.72rem; font-weight: 700; min-width: 1.1rem; text-align: center;
+}
+
 /* Edit/Preview toggle */
 .atlas-reqview-modes { display: inline-flex; border: 1px solid var(--border-soft); border-radius: 6px; overflow: hidden; }
 .atlas-reqview-modes button {
