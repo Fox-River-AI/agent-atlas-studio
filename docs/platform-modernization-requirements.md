@@ -202,3 +202,76 @@ source of truth (intent isn't fully in the doc).
 | Batch runner / run-tracker / audit-logger (§7) | **Job** |
 | mapping/codegen model selection (§6) | **Router** |
 | Sources, targets, catalog/IR/state/registry/audit (§3,4,8) | **System** |
+
+## Governance — to declare (resolved)
+
+_These were recommended by the governance review and have been filled with concrete
+values. They extend §8.5 with the per-agent / quantified detail a conformance check needs._
+
+### Refusal / grounding thresholds _(high)_
+Per-agent thresholds: `mapping-agent` refuses and escalates when confidence_score < 0.80;
+`codegen-agent` refuses when confidence_score < 0.75; `validation-agent` refuses when
+row-count delta > 0.1% OR sample-value mismatch rate > 1% OR any integrity-check failure.
+Threshold type: fixed constants for v1. All refusals route to `review-router-agent`
+synchronously (immediate).
+
+### Human oversight (HITL SLA & authority) _(high)_
+The `review-router-agent` holds a queued object for up to 4 business hours before
+re-escalating to the platform-team-lead. Authorized reviewers are the data-engineering
+team role. A human reviewer MAY override a `validation-agent` refusal only when the
+reviewer attaches a written rationale logged to `audit-log`; overrides are appended to the
+`audit-log` as a distinct event type.
+
+### Observability / telemetry schema _(high)_
+All agent telemetry is emitted at 100% (no sampling) to the `metadata-catalog` telemetry
+partition. Fields containing source-data values (e.g. sample_value, error_message,
+construct_text) MUST be SHA-256 hashed before indexing. Telemetry is retained for 90 days
+and is subject to the same on-prem residency requirement as `metadata-catalog`. The
+canonical redaction-trigger field list is: sample_value, construct_text, error_detail,
+source_schema_name.
+
+### Compliance regimes — quantified obligations _(high)_
+SOC 2 target is Type II; audit period annual. GDPR data-subject-request (DSR) response
+SLA: 30 calendar days. HIPAA BAA is required before any customer run where source systems
+are declared PHI-bearing; breach notification window: 60 calendar days (per HITECH).
+EU AI Act risk tier for automated mapping and codegen decisions: high-risk (Annex III
+candidate); conformity assessment: internal review + technical documentation per Art. 11.
+
+### Security posture _(high)_
+All data at rest in `ir-store`, `metadata-catalog`, `state-store`, and `audit-log` is
+encrypted with AES-256 using customer-managed keys via KMS. All agent-to-system and
+agent-to-agent communication uses TLS 1.3 minimum. Extractor credentials are stored in a
+secrets manager (HashiCorp Vault) and rotated every 90 days. Agent workloads run in a
+dedicated VPC/VLAN with no egress to public internet except router-policy-approved model
+endpoints. Vulnerability scans run weekly; penetration tests annually.
+
+### Explainability / transparency _(medium)_
+The `mapping-agent` MUST attach a human-readable rationale string to every mapping
+decision stored in `metadata-catalog`, structured as: construct_id, source_construct,
+target_construct, confidence_score, rationale_text (max 500 characters), and model_id. The
+`review-router-agent` MUST surface this rationale in the HITL review UI. A per-run
+explainability summary (aggregate confidence distribution, count of HITL escalations,
+model routing breakdown) is exported to `metadata-catalog` and retained for 3 years.
+
+### Accountability / component ownership granularity _(medium)_
+Per-component accountable roles: orchestrator → platform-team; discovery-agent,
+parsing-agent, mapping-agent, codegen-agent, validation-agent → data-engineering-team;
+review-router-agent → data-engineering-team; conversion-model-router → platform-team;
+audit-log → compliance-team; metadata-catalog, ir-store, state-store, tool-registry →
+platform-team; conversion-batch-runner, extraction-run-tracker, audit-logger jobs →
+data-engineering-team. Each owner role reviews component-level telemetry monthly and
+attests in the `audit-log` annually.
+
+### Router governance — confidential/regulated routing enforcement _(medium)_
+The router determines artifact sensitivity from a `metadata-catalog` classification tag
+set by the `discovery-agent`. When the tag is confidential or regulated, the router MUST
+select from the approved local model list. If no approved local model is available, the
+router hard-stops the task and raises a HITL escalation rather than falling back to a
+cloud/frontier model. Every routing decision (model-id, version, sensitivity-tag,
+rationale) is appended to `audit-log` within 5 seconds of the routing event.
+
+### ir-store retention precision _(low)_
+`ir-store` content for a given run is purged within 24 hours of the run reaching the
+ratified state (the `review-router-agent` emits a ratification event to `audit-log`). On
+run failure or timeout without ratification, content is purged after 7 days. The purge is
+executed by the `audit-logger` job and recorded as a purge-event in `audit-log`.
