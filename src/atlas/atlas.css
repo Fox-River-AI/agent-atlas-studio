@@ -24,6 +24,16 @@
 .atlas-logo { height: 28px; width: auto; display: block; }
 .atlas-about-head { display: flex; align-items: center; gap: 0.75rem; margin-bottom: 0.25rem; }
 .atlas-about-logo { height: 44px; width: auto; display: block; }
+/* Model name in the toolbar — editable, shared with the requirements project.
+   Takes the flexible middle space so the section-switch and actions stay put. */
+.atlas-project-name {
+  flex: 1; min-width: 0; margin: 0 1rem;
+  background: transparent; border: 1px solid transparent; border-radius: 6px;
+  color: var(--text); font-size: 1.05rem; font-weight: 700;
+  padding: 0.2rem 0.5rem; text-overflow: ellipsis;
+}
+.atlas-project-name:hover { border-color: var(--border-soft); }
+.atlas-project-name:focus { outline: none; border-color: var(--accent); background: var(--bg-elevated); }
 .atlas-actions { display: flex; align-items: center; gap: 0.6rem; }
 .atlas-actions button {
   background: var(--bg-elevated);

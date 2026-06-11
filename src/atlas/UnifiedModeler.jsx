@@ -263,6 +263,14 @@ export default function UnifiedModeler() {
   const createRequirements = useCallback((name) => setRequirements({ name: name || 'Platform Modernization', text: '' }), []);
   const setRequirementsText = useCallback((text) => setRequirements((r) => ({ ...(r || { name: 'Platform Modernization' }), text })), []);
   const importRequirements = useCallback((name, text) => setRequirements({ name: name || 'Platform Modernization', text: text ?? '' }), []);
+  // The PROJECT name is one value, held on the requirements object and shown in both
+  // the Requirements doc header and the Model toolbar (so you always know which model
+  // you're looking at). Editing it anywhere updates the single source. If no
+  // requirements doc exists yet, renaming creates a minimal one to carry the name.
+  const projectName = requirements?.name || 'Untitled model';
+  const renameProject = useCallback((name) => {
+    setRequirements((r) => (r ? { ...r, name } : { name, text: '' }));
+  }, []);
   const [seedConfirm, setSeedConfirm] = useState(null); // { count, resolve } | null
 
   const toggleExpand = useCallback((id) => setExpanded((e) => ({ ...e, [id]: !e[id] })), []);
@@ -766,6 +774,16 @@ export default function UnifiedModeler() {
           <button role="tab" className={section === 'model' ? 'active' : ''}
             onClick={() => setSection('model')}>Model</button>
         </div>
+        {section === 'model' && (
+          <input
+            className="atlas-project-name"
+            value={projectName}
+            onChange={(e) => renameProject(e.target.value)}
+            title="Model name — shared with the requirements project"
+            aria-label="Model name"
+            spellCheck={false}
+          />
+        )}
         <div className="atlas-actions" style={{ visibility: section === 'model' ? 'visible' : 'hidden' }}>
           {allValid ? (
             <span className="atlas-status ok">✓ registry valid</span>
@@ -897,7 +915,6 @@ export default function UnifiedModeler() {
           onToggleCollapse={() => setTreeCollapsed((c) => !c)}
           onOpenSettings={() => setModal('settings')}
           onOpenAbout={() => setModal('about')}
-          onOpenRequirements={() => guardedNavigate(() => setModal('requirements'))}
           inSubjectArea={!!currentSA}
           canDelete={!currentSA}
           hiddenIds={hiddenInView}
