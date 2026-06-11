@@ -55,6 +55,18 @@
         },
         "fallback": { "type": "string", "description": "candidate model name used when no rule matches." }
       }
+    },
+    "governance": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Regime-neutral trust/privacy controls (NIST AI RMF: privacy, security, accountability). Optional — declare what the requirements state; leave the rest for a human.",
+      "properties": {
+        "data_classification": { "enum": ["public", "internal", "confidential", "regulated"], "description": "Sensitivity of the data this object touches." },
+        "data_tags": { "type": "array", "description": "Regulatory data classes (MULTIPLE may apply, e.g. PHI and PII).", "items": { "type": "string" }, "uniqueItems": true },
+        "residency": { "enum": ["any", "in-region", "on-prem"], "description": "Where data may be processed/stored. 'on-prem' = never leaves the boundary." },
+        "retention": { "type": "string", "description": "Retention policy, e.g. '7y', '30d', 'none'." },
+        "redaction": { "type": "array", "description": "Fields to filter/redact/drop before telemetry is indexed.", "items": { "type": "string" }, "uniqueItems": true }
+      }
     }
   }
 }

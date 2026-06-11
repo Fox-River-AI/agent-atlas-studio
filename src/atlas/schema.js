@@ -12,7 +12,9 @@ import Ajv from 'ajv/dist/2020';
 // Agent schema is prototyped in-studio (model = pinned OR router ref) ahead of
 // upstreaming to agent-atlas; tool stays the canonical submodule copy.
 import agentSchema from './schemas/agent.schema.json';
-import toolSchema from '../../vendor/agent-atlas/registry/schema/tool.schema.json';
+// Tool is now studio-prototyped too (carries the governance block, like agent/
+// job/system) ahead of upstreaming the governance extensions to the submodule.
+import toolSchema from './schemas/tool.schema.json';
 // Job + System are prototyped in the studio for fast iteration; once proven
 // in the UI they get upstreamed to agent-atlas as canonical schemas.
 import jobSchema from './schemas/job.schema.json';

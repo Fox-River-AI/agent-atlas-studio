@@ -17,6 +17,24 @@
       "enum": ["state-machine", "dag", "sequential"],
       "description": "How the orchestrator expresses control flow: a state machine, a DAG, or a simple sequence."
     },
-    "state_store": { "type": "string", "description": "id of a System (kind=state-store) where run/step state is externalized." }
+    "state_store": { "type": "string", "description": "id of a System (kind=state-store) where run/step state is externalized." },
+    "compliance_regimes": {
+      "type": "array",
+      "description": "Model-level: the compliance standards this whole system claims to satisfy (NIST AI RMF vocabulary). System-governing regimes like SOC 2 / FedRAMP / EU AI Act live HERE (they govern the system, not a single field); per-object data classes (PHI/PII/PCI) live in each object's governance.data_tags. MULTIPLE apply.",
+      "items": { "type": "string" },
+      "uniqueItems": true
+    },
+    "governance": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Regime-neutral trust/privacy controls (NIST AI RMF: privacy, security, accountability). Optional — declare what the requirements state; leave the rest for a human.",
+      "properties": {
+        "data_classification": { "enum": ["public", "internal", "confidential", "regulated"], "description": "Sensitivity of the data this object touches." },
+        "data_tags": { "type": "array", "description": "Regulatory data classes (MULTIPLE may apply, e.g. PHI and PII).", "items": { "type": "string" }, "uniqueItems": true },
+        "residency": { "enum": ["any", "in-region", "on-prem"], "description": "Where data may be processed/stored. 'on-prem' = never leaves the boundary." },
+        "retention": { "type": "string", "description": "Retention policy, e.g. '7y', '30d', 'none'." },
+        "redaction": { "type": "array", "description": "Fields to filter/redact/drop before telemetry is indexed.", "items": { "type": "string" }, "uniqueItems": true }
+      }
+    }
   }
 }

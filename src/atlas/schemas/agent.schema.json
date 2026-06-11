@@ -86,6 +86,35 @@
           }
         }
       }
+    },
+    "prohibited_tools": {
+      "type": "array",
+      "description": "NEGATIVE declaration (NIST Govern: 'prohibited actions'). Tool ids this agent must NEVER call, even if otherwise reachable — distinct from the positive `tools` allowlist. Conformance can flag a runtime call to any of these.",
+      "items": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]*$" },
+      "uniqueItems": true
+    },
+    "grounding_threshold": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1,
+      "description": "Confidence gate: the agent should refuse rather than answer when grounding/confidence falls below this (e.g. 0.95 for regulated domains). The declared bound conformance checks runtime behavior against."
+    },
+    "escalation_to": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9-]*$",
+      "description": "id of the System/Job/queue this agent escalates to on refusal or low confidence — escalation as a named target, not just a refusal flag."
+    },
+    "governance": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Regime-neutral trust/privacy controls (NIST AI RMF: privacy, security, accountability). The control is declared here; which standard it satisfies is named by data_tags and the model-level compliance_regimes. Optional — declare what the requirements state; leave the rest for a human.",
+      "properties": {
+        "data_classification": { "enum": ["public", "internal", "confidential", "regulated"], "description": "Sensitivity of the data this object touches." },
+        "data_tags": { "type": "array", "description": "Regulatory data classes (MULTIPLE may apply, e.g. PHI and PII).", "items": { "type": "string" }, "uniqueItems": true },
+        "residency": { "enum": ["any", "in-region", "on-prem"], "description": "Where data may be processed/stored. 'on-prem' = never leaves the boundary." },
+        "retention": { "type": "string", "description": "Retention policy, e.g. '7y', '30d', 'none'." },
+        "redaction": { "type": "array", "description": "Fields to filter/redact/drop before telemetry is indexed (so observability isn't a compliance liability).", "items": { "type": "string" }, "uniqueItems": true }
+      }
     }
   }
 }
