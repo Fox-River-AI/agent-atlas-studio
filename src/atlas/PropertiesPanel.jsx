@@ -79,10 +79,11 @@ function PanelHead({ title, dirty, onCollapse, children }) {
   );
 }
 
-export default function PropertiesPanel({ node, onChange, errors, idError, dirty, canSave, onSave, onRevert, newObject, onCollapse }) {
+export default function PropertiesPanel({ node, onChange, errors, idError, dirty, canSave, onSave, onRevert, newObject, onCollapse, width }) {
+  const style = width ? { width: `${width}px` } : undefined;
   if (!node) {
     return (
-      <div className="atlas-panel empty">
+      <div className="atlas-panel empty" style={style}>
         <PanelHead title="PROPERTIES" onCollapse={onCollapse} />
         <p className="atlas-panel-emptymsg">Select a node to edit it, or add an Agent or Tool from the model tree.</p>
       </div>
@@ -99,7 +100,7 @@ export default function PropertiesPanel({ node, onChange, errors, idError, dirty
   return (
     // autoCapitalize/Correct/spellCheck off so ids like "db-connect" aren't
     // mangled to "Db-connect" by the webview (WebKit inherits these to inputs).
-    <div className="atlas-panel" autoCapitalize="off" autoCorrect="off" spellCheck={false}>
+    <div className="atlas-panel" style={style} autoCapitalize="off" autoCorrect="off" spellCheck={false}>
       <PanelHead
         title={({ orchestrator: 'ORCHESTRATOR', task: 'TASK', agent: 'AGENT', tool: 'MCP TOOL', job: 'JOB', system: 'EXTERNAL SYSTEM', router: 'ROUTER' }[node.type] || node.type).toUpperCase()}
         dirty={dirty}

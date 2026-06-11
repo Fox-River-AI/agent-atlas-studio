@@ -66,6 +66,22 @@ function sanitizeData(kind, data, id, problems) {
       delete data.policy;
       problems.push(`“${id}”: router policy was nested — flattened to the editable fields.`);
     }
+    // optimize_for is a STRICT enum: quality | cost | latency. Map common
+    // near-misses ("output-quality"→"quality") and drop anything off-list, so a
+    // generated router validates instead of failing on every stray value.
+    if (Array.isArray(data.optimizeFor)) {
+      const ALLOWED = new Set(['quality', 'cost', 'latency']);
+      const MAP = { 'output-quality': 'quality', 'output_quality': 'quality', accuracy: 'quality', speed: 'latency', price: 'cost' };
+      const cleaned = [];
+      const dropped = [];
+      for (const v0 of data.optimizeFor) {
+        const v = MAP[v0] || v0;
+        if (ALLOWED.has(v)) { if (!cleaned.includes(v)) cleaned.push(v); }
+        else dropped.push(v0);
+      }
+      if (dropped.length) problems.push(`“${id}”: optimize_for dropped invalid value(s) ${dropped.join(', ')} (allowed: quality, cost, latency).`);
+      data.optimizeFor = cleaned;
+    }
   }
 }
 

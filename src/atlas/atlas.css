@@ -250,12 +250,19 @@
 
 /* Properties panel */
 .atlas-panel {
-  width: 21rem;
+  width: 21rem;        /* default; overridden by an inline width when resized */
+  flex: none;          /* honor the explicit width instead of flex-shrinking */
   border-left: 1px solid var(--border);
   padding: 0 1rem 1rem;
   overflow-y: auto;
   background: var(--bg-panel);
 }
+/* Drag handle between canvas and properties panel */
+.atlas-panel-resize {
+  flex: none; width: 6px; cursor: col-resize; background: transparent;
+  border-left: 1px solid var(--border); margin-left: -1px;
+}
+.atlas-panel-resize:hover { background: var(--accent); opacity: 0.6; }
 .atlas-panel.empty { color: var(--text-muted); font-size: 0.95rem; }
 .atlas-panel h3 { margin: 0; color: var(--accent); font-size: 1.1rem; }
 .atlas-panel-emptymsg { color: var(--text-muted); font-size: 0.95rem; padding: 0 0.2rem; }

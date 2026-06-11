@@ -36,8 +36,20 @@ const SECTIONS = [
     blurb: 'Diff two models — versions, or declared-vs-discovered.' },
 ];
 
+// Properties-panel width is user-resizable (some kinds have long field values).
+// Persisted in localStorage so it survives a restart; clamped to a sane range.
+const PANEL_W_KEY = 'atlas-panel-width';
+const PANEL_MIN = 280, PANEL_MAX = 760;
+const readPanelWidth = () => {
+  const n = parseInt((typeof localStorage !== 'undefined' && localStorage.getItem(PANEL_W_KEY)) || '', 10);
+  return Number.isFinite(n) ? Math.min(PANEL_MAX, Math.max(PANEL_MIN, n)) : 336; // 336px ≈ old 21rem
+};
+
 export default function UnifiedModeler() {
   const { endpointUrl } = useTheme();
+  const [panelWidth, setPanelWidth] = useState(readPanelWidth);
+  const panelWidthRef = useRef(panelWidth);
+  panelWidthRef.current = panelWidth; // keep latest width for the drag-end save (no stale closure)
   // Render the demo seed first; if a saved model exists on disk it's loaded
   // asynchronously on mount (see the hydrate effect) and swapped in. Persistence
   // is a real file in Tauri (localStorage doesn't survive restart on the dev
@@ -1044,7 +1056,34 @@ export default function UnifiedModeler() {
           onViewportChange={setViewport}
         />
         {panelOpen && (
+          <div
+            className="atlas-panel-resize"
+            role="separator"
+            aria-orientation="vertical"
+            title="Drag to resize the properties panel"
+            onMouseDown={(e) => {
+              e.preventDefault();
+              const startX = e.clientX, startW = panelWidth;
+              const onMove = (ev) => {
+                // Panel is on the right; dragging LEFT (smaller clientX) widens it.
+                const w = Math.min(PANEL_MAX, Math.max(PANEL_MIN, startW + (startX - ev.clientX)));
+                setPanelWidth(w);
+              };
+              const onUp = () => {
+                window.removeEventListener('mousemove', onMove);
+                window.removeEventListener('mouseup', onUp);
+                document.body.style.cursor = '';
+                try { localStorage.setItem(PANEL_W_KEY, String(panelWidthRef.current)); } catch { /* ignore */ }
+              };
+              document.body.style.cursor = 'col-resize';
+              window.addEventListener('mousemove', onMove);
+              window.addEventListener('mouseup', onUp);
+            }}
+          />
+        )}
+        {panelOpen && (
           <PropertiesPanel
+            width={panelWidth}
             node={draftNode}
             onChange={editDraft}
             errors={selectedErrors}
