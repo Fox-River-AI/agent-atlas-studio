@@ -579,7 +579,19 @@
 .atlas-review-panel { margin: 0.5rem 1rem; border: 1px solid var(--border); border-radius: 8px; background: var(--bg-panel); padding: 0.75rem 1rem; max-height: 45vh; overflow-y: auto; }
 .atlas-review-head { display: flex; align-items: center; justify-content: space-between; }
 .atlas-review-head strong { color: var(--accent); }
+.atlas-review-headbtns { display: flex; align-items: center; gap: 0.6rem; }
+.atlas-review-applyall {
+  background: var(--accent); color: var(--accent-fg); border: none; border-radius: 6px;
+  padding: 0.3rem 0.7rem; font-size: 0.82rem; font-weight: 600; cursor: pointer;
+}
+.atlas-review-applyall:disabled { opacity: 0.45; cursor: default; }
 .atlas-review-dismiss { background: none; border: none; color: var(--text-muted); font-size: 1.2rem; cursor: pointer; line-height: 1; }
+.atlas-review-apply {
+  margin-left: auto; background: transparent; color: var(--accent); border: 1px solid var(--accent);
+  border-radius: 5px; padding: 0.12rem 0.55rem; font-size: 0.78rem; font-weight: 600; cursor: pointer;
+}
+.atlas-review-apply:hover:not(:disabled) { background: var(--bg); }
+.atlas-review-apply:disabled { opacity: 0.5; cursor: default; border-color: var(--border-soft); color: var(--text-muted); }
 .atlas-review-summary { color: var(--text); font-size: 0.92rem; line-height: 1.55; margin: 0.4rem 0 0.7rem; }
 .atlas-review-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.5rem; }
 .atlas-review-item { border-left: 3px solid var(--border-soft); padding: 0.4rem 0.7rem; background: var(--bg-elevated); border-radius: 0 6px 6px 0; }

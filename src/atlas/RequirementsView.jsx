@@ -59,14 +59,49 @@ export default function RequirementsView({
     } finally { setBusy(false); }
   };
 
+  const [applied, setApplied] = useState(() => new Set()); // indices already appended
+
   const runReview = async () => {
-    setErr(null); setMsg(null); setReview(null); setReviewBusy(true);
+    setErr(null); setMsg(null); setReview(null); setApplied(new Set()); setReviewBusy(true);
     try {
       const r = await onReview();
       setReview(r || { summary: '', recommendations: [] });
     } catch (e2) {
       setErr(e2?.message || String(e2));
     } finally { setReviewBusy(false); }
+  };
+
+  // Append a recommendation's suggestion into the doc, under a single
+  // "## Governance — to declare" section (created once). You then fill the
+  // <to-be-declared> blanks with real values and regenerate. The doc stays the
+  // single source — no copy-paste, and we never assert values for you.
+  const HEADING = '## Governance — to declare';
+  const recBlock = (r) => `\n### ${r.area || 'Governance'}${r.severity ? ` _(${r.severity})_` : ''}\n${r.suggestion || ''}\n`;
+  const applyRec = (r, i) => {
+    let text = requirements.text || '';
+    if (!text.includes(HEADING)) {
+      text = `${text.replace(/\s*$/, '')}\n\n${HEADING}\n\n_Declarations recommended by the governance review. Fill each <…> with a real value, then Generate. Delete any you don't want._\n${recBlock(r)}`;
+    } else {
+      text = `${text.replace(/\s*$/, '')}\n${recBlock(r)}`;
+    }
+    onChangeText(text);
+    setApplied((s) => new Set(s).add(i));
+    setMode('edit');
+    setMsg(`Added “${r.area}” to the document — fill the blanks, then Generate.`);
+  };
+  const applyAll = () => {
+    const recs = review?.recommendations || [];
+    const pending = recs.map((r, i) => [r, i]).filter(([, i]) => !applied.has(i));
+    if (!pending.length) return;
+    let text = requirements.text || '';
+    if (!text.includes(HEADING)) {
+      text = `${text.replace(/\s*$/, '')}\n\n${HEADING}\n\n_Declarations recommended by the governance review. Fill each <…> with a real value, then Generate. Delete any you don't want._\n`;
+    }
+    text = `${text.replace(/\s*$/, '')}\n${pending.map(([r]) => recBlock(r)).join('')}`;
+    onChangeText(text);
+    setApplied(new Set(recs.map((_, i) => i)));
+    setMode('edit');
+    setMsg(`Added ${pending.length} recommendation(s) to the document — fill the blanks, then Generate.`);
   };
 
   // ── No project yet: create it (singular) ──
@@ -157,7 +192,16 @@ export default function RequirementsView({
         <div className="atlas-review-panel">
           <div className="atlas-review-head">
             <strong>Governance review</strong>
-            <button className="atlas-review-dismiss" onClick={() => setReview(null)} title="Dismiss">×</button>
+            <div className="atlas-review-headbtns">
+              {(review.recommendations || []).length > 0 && (
+                <button className="atlas-review-applyall" onClick={applyAll}
+                  disabled={applied.size >= (review.recommendations || []).length}
+                  title="Append every recommendation's suggested declaration into the document">
+                  Apply all to document
+                </button>
+              )}
+              <button className="atlas-review-dismiss" onClick={() => setReview(null)} title="Dismiss">×</button>
+            </div>
           </div>
           {review.summary && <p className="atlas-review-summary">{review.summary}</p>}
           {(review.recommendations || []).length === 0 ? (
@@ -169,6 +213,9 @@ export default function RequirementsView({
                   <div className="atlas-review-item-head">
                     <span className="atlas-review-sev">{(r.severity || 'medium').toUpperCase()}</span>
                     <span className="atlas-review-area">{r.area}</span>
+                    <button className="atlas-review-apply" onClick={() => applyRec(r, i)} disabled={applied.has(i)}>
+                      {applied.has(i) ? '✓ Added' : 'Apply'}
+                    </button>
                   </div>
                   {r.finding && <div className="atlas-review-finding">{r.finding}</div>}
                   {r.suggestion && <div className="atlas-review-suggestion"><em>Add:</em> {r.suggestion}</div>}
@@ -177,8 +224,9 @@ export default function RequirementsView({
             </ul>
           )}
           <p className="atlas-review-foot">
-            These are suggested declarations to ADD to your requirements — the model only fills
-            governance the document states. Edit the document above, then Generate.
+            “Apply” appends the suggested declaration into your document under
+            <strong> Governance — to declare</strong>. Fill each &lt;…&gt; with a real value, then
+            Generate — the model only fills governance the document states.
           </p>
         </div>
       )}
