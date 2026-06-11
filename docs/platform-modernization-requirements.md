@@ -123,6 +123,52 @@ Six core agents over the shared context, one per pipeline stage:
   thing that prevents "the same extractor built twice."
 - `audit-log` — retained audit trail.
 
+## 8.5 Governance, privacy & compliance (→ governance declarations)
+
+These are the governance facts the model must carry to be NIST-AI-RMF-legible
+(Govern/Map) and conformance-checkable. Declared here so the generator can fill the
+manifest governance fields rather than flag them as gaps.
+
+### Compliance regimes (whole platform)
+Causeway as a product must satisfy **SOC 2** and **GDPR**. **HIPAA** applies
+conditionally when a customer ingests PHI-bearing legacy systems (BAA required).
+**EU AI Act** high-risk provisions apply to the automated mapping and code-generation
+decisions. **FedRAMP is out of scope** for the initial release.
+
+### Data classification, residency & retention (systems §8)
+- `ir-store` — **confidential**; may contain sampled source values (PII/PHI possible
+  depending on customer source); **on-prem**; purged after a conversion run is ratified;
+  sampled values **redacted/tokenized** before write.
+- `metadata-catalog` — **confidential**; lineage + quality signals; **on-prem**; source
+  values **redacted** before indexing; retained 1y.
+- `state-store` — **internal**; run/checkpoint state only; **on-prem**.
+- `tool-registry` — **internal**; **on-prem**.
+- `audit-log` — **regulated**; append-only audit trail; **on-prem**; retained **7y**.
+- Source/target systems carry the **customer's** classification; treat as
+  **confidential** by default, **regulated** where the customer declares PHI/PII/PCI.
+
+### Per-agent governance (§5)
+- Every reasoning agent declares a **grounding/confidence threshold** below which it
+  **refuses and escalates** to the `review-router-agent` (HITL). The `validation-agent`
+  refuses on failed equivalence (row-count delta beyond tolerance, sample-value mismatch,
+  integrity-check failure).
+- **Prohibited actions:** no agent may perform write/mutate operations on **source**
+  systems (extractors are read-only); no agent may directly deploy/execute generated code
+  in a target (codegen only **stages**); no agent may bypass the HITL gate.
+- Agents emit telemetry: agent-id, object-id, stage, model-selected, confidence-score,
+  duration, refusal-flag, escalation-flag — with source-data values **redacted** before
+  indexing.
+
+### Ownership
+Each component declares an accountable **role** (not individual): the platform team owns
+the orchestrator and shared systems; the data-engineering team owns the agents and jobs.
+The `audit-log` is reviewed quarterly by the compliance role.
+
+### Router governance (§6)
+Every routing event records the specific model id + version to the `audit-log`. When
+processing **confidential or regulated** source artifacts, the router must select a
+**locally-hosted** model (no frontier/cloud routing).
+
 ## 9. Subject Areas (saved demo views)  ⟵ confirm
 - **Discovery & Parsing** (Discover + Parse tasks, extractors, ir-store, metadata-catalog)
 - **Mapping & Codegen** (Map + Generate, mapping/codegen agents, router, tool-registry)
