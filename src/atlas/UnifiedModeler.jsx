@@ -739,7 +739,10 @@ export default function UnifiedModeler() {
         const dir = await open({ directory: true, title: 'Choose an empty folder for the build bundle' });
         if (!dir) { setExportMsg('Export cancelled.'); return; }
         const made = new Set();
-        for (const [rel, content] of Object.entries(files)) {
+        for (const [rel0, content] of Object.entries(files)) {
+          // Normalize: the orchestrator's dir is '.', producing 'registry/./x' —
+          // Tauri's path scope rejects './' segments. Collapse them.
+          const rel = rel0.replace(/\/\.\//g, '/').replace(/\/{2,}/g, '/');
           const full = `${dir}/${rel}`;
           const parent = full.slice(0, full.lastIndexOf('/'));
           if (parent && !made.has(parent)) { try { await mkdir(parent, { recursive: true }); } catch { /* exists */ } made.add(parent); }
