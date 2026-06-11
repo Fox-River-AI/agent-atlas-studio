@@ -14,24 +14,27 @@ export default function RequirementsView({
   onChangeText,       // (text) => void   — edit the doc body
   onImport,           // (name, text) => void  — set from an imported file
   onGenerate,         // () => Promise<{notes?:[]}>  — seed the model (parent handles confirm/apply)
+  onReview,           // () => Promise<{summary,recommendations[]}> — governance review of the doc
   endpointConfigured, // bool — is a generate endpoint set in Settings?
 }) {
   const [busy, setBusy] = useState(false);
+  const [reviewBusy, setReviewBusy] = useState(false);
+  const [review, setReview] = useState(null); // { summary, recommendations[] } | null
   const [msg, setMsg] = useState(null);
   const [err, setErr] = useState(null);
   const [mode, setMode] = useState('edit'); // 'edit' | 'preview'
-  const [elapsed, setElapsed] = useState(0); // seconds the current generation has run
+  const [elapsed, setElapsed] = useState(0); // seconds the current op has run
   const tick = useRef(null);
 
-  // While generating, tick a once-a-second elapsed counter so the user sees the
-  // run is alive (a full-doc model takes ~2-3 min; without this it's a frozen
-  // "Generating…"). Cleared whenever we stop being busy.
+  // While generating OR reviewing, tick a once-a-second elapsed counter so the
+  // user sees the run is alive (these take 1-3 min). Cleared when idle.
+  const working = busy || reviewBusy;
   useEffect(() => {
-    if (!busy) { if (tick.current) { clearInterval(tick.current); tick.current = null; } return; }
+    if (!working) { if (tick.current) { clearInterval(tick.current); tick.current = null; } return; }
     setElapsed(0);
     tick.current = setInterval(() => setElapsed((s) => s + 1), 1000);
     return () => { if (tick.current) { clearInterval(tick.current); tick.current = null; } };
-  }, [busy]);
+  }, [working]);
 
   const fmtElapsed = (s) => (s < 60 ? `${s}s` : `${Math.floor(s / 60)}m ${String(s % 60).padStart(2, '0')}s`);
 
@@ -54,6 +57,16 @@ export default function RequirementsView({
     } catch (e2) {
       setErr(e2?.message || String(e2));
     } finally { setBusy(false); }
+  };
+
+  const runReview = async () => {
+    setErr(null); setMsg(null); setReview(null); setReviewBusy(true);
+    try {
+      const r = await onReview();
+      setReview(r || { summary: '', recommendations: [] });
+    } catch (e2) {
+      setErr(e2?.message || String(e2));
+    } finally { setReviewBusy(false); }
   };
 
   // ── No project yet: create it (singular) ──
@@ -107,9 +120,17 @@ export default function RequirementsView({
             <input type="file" accept=".md,.txt,text/plain,text/markdown" onChange={importFile} />
           </label>
           <button
+            className="atlas-reqview-review"
+            onClick={runReview}
+            disabled={working || !requirements.text?.trim() || !endpointConfigured}
+            title={endpointConfigured ? 'Review the document for NIST-style governance gaps before generating' : 'Set a model endpoint in Settings first'}
+          >
+            {reviewBusy ? `Reviewing… ${fmtElapsed(elapsed)}` : '✓ Review for governance'}
+          </button>
+          <button
             className="atlas-reqview-generate"
             onClick={generate}
-            disabled={busy || !requirements.text?.trim()}
+            disabled={working || !requirements.text?.trim()}
             title={endpointConfigured ? 'Seed the model from these requirements (replaces the current model)' : 'Set a model endpoint in Settings first'}
           >
             {busy ? `Generating… ${fmtElapsed(elapsed)}` : 'Generate model from requirements'}
@@ -120,15 +141,47 @@ export default function RequirementsView({
       {!endpointConfigured && (
         <div className="atlas-reqview-hint">No model endpoint set — add one in Settings to enable “Generate model”.</div>
       )}
-      {busy && (
+      {working && (
         <div className="atlas-reqview-msg working">
           <span className="atlas-spinner" aria-hidden="true" />
-          Generating the model from your requirements — this can take a couple of minutes.
-          Elapsed {fmtElapsed(elapsed)}.
+          {busy
+            ? 'Generating the model from your requirements — this can take a couple of minutes.'
+            : 'Reviewing the document for governance gaps — about a minute.'}
+          {' '}Elapsed {fmtElapsed(elapsed)}.
         </div>
       )}
       {msg && <div className="atlas-reqview-msg ok">{msg}</div>}
       {err && <div className="atlas-reqview-msg err">{err}</div>}
+
+      {review && (
+        <div className="atlas-review-panel">
+          <div className="atlas-review-head">
+            <strong>Governance review</strong>
+            <button className="atlas-review-dismiss" onClick={() => setReview(null)} title="Dismiss">×</button>
+          </div>
+          {review.summary && <p className="atlas-review-summary">{review.summary}</p>}
+          {(review.recommendations || []).length === 0 ? (
+            <p className="atlas-empty">No recommendations — the document looks governance-complete.</p>
+          ) : (
+            <ul className="atlas-review-list">
+              {review.recommendations.map((r, i) => (
+                <li key={i} className={`atlas-review-item sev-${(r.severity || 'medium').toLowerCase()}`}>
+                  <div className="atlas-review-item-head">
+                    <span className="atlas-review-sev">{(r.severity || 'medium').toUpperCase()}</span>
+                    <span className="atlas-review-area">{r.area}</span>
+                  </div>
+                  {r.finding && <div className="atlas-review-finding">{r.finding}</div>}
+                  {r.suggestion && <div className="atlas-review-suggestion"><em>Add:</em> {r.suggestion}</div>}
+                </li>
+              ))}
+            </ul>
+          )}
+          <p className="atlas-review-foot">
+            These are suggested declarations to ADD to your requirements — the model only fills
+            governance the document states. Edit the document above, then Generate.
+          </p>
+        </div>
+      )}
 
       {mode === 'edit' ? (
         <textarea

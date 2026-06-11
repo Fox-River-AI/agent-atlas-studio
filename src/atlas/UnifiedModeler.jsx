@@ -265,6 +265,15 @@ export default function UnifiedModeler() {
     return { notes: [...notes, ...problems] };
   }, [requirements, objects, edges, expanded, subjectAreas, layouts, viewports, endpointUrl, applyGeneratedModel]);
 
+  // Review the requirements doc for governance gaps BEFORE generating (Step 3).
+  // Returns { summary, recommendations[] } for the RequirementsView to display.
+  const reviewRequirements = useCallback(async () => {
+    const text = requirements?.text || '';
+    if (!text.trim()) { const e = new Error('The requirements document is empty.'); throw e; }
+    const provider = httpEndpointProvider(endpointUrl);
+    return provider.reviewRequirements(text);
+  }, [requirements, endpointUrl]);
+
   // Restore the model as it was before the last generate-seed.
   const undoGenerate = useCallback(() => {
     if (!modelUndo) return;
@@ -925,6 +934,7 @@ export default function UnifiedModeler() {
           onChangeText={setRequirementsText}
           onImport={importRequirements}
           onGenerate={generateFromRequirements}
+          onReview={reviewRequirements}
           endpointConfigured={!!endpointUrl}
         />
        ) : section !== 'model' ? (

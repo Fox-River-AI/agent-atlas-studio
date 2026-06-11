@@ -567,6 +567,32 @@
   padding: 0.45rem 1rem; font-weight: 600; cursor: pointer; font-size: 0.9rem;
 }
 .atlas-reqview-generate:disabled { opacity: 0.45; cursor: default; }
+/* Secondary "Review for governance" button — outlined, not filled */
+.atlas-reqview-review {
+  background: transparent; color: var(--accent); border: 1px solid var(--accent); border-radius: 6px;
+  padding: 0.45rem 0.9rem; font-weight: 600; cursor: pointer; font-size: 0.9rem;
+}
+.atlas-reqview-review:hover:not(:disabled) { background: var(--bg-elevated); }
+.atlas-reqview-review:disabled { opacity: 0.45; cursor: default; }
+
+/* Governance review panel */
+.atlas-review-panel { margin: 0.5rem 1rem; border: 1px solid var(--border); border-radius: 8px; background: var(--bg-panel); padding: 0.75rem 1rem; max-height: 45vh; overflow-y: auto; }
+.atlas-review-head { display: flex; align-items: center; justify-content: space-between; }
+.atlas-review-head strong { color: var(--accent); }
+.atlas-review-dismiss { background: none; border: none; color: var(--text-muted); font-size: 1.2rem; cursor: pointer; line-height: 1; }
+.atlas-review-summary { color: var(--text); font-size: 0.92rem; line-height: 1.55; margin: 0.4rem 0 0.7rem; }
+.atlas-review-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.5rem; }
+.atlas-review-item { border-left: 3px solid var(--border-soft); padding: 0.4rem 0.7rem; background: var(--bg-elevated); border-radius: 0 6px 6px 0; }
+.atlas-review-item.sev-high { border-left-color: var(--bad); }
+.atlas-review-item.sev-medium { border-left-color: var(--accent); }
+.atlas-review-item.sev-low { border-left-color: var(--text-dim); }
+.atlas-review-item-head { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.2rem; }
+.atlas-review-sev { font-size: 0.7rem; font-weight: 700; letter-spacing: 0.5px; color: var(--text-muted); }
+.atlas-review-area { font-weight: 600; color: var(--text); font-size: 0.9rem; }
+.atlas-review-finding { font-size: 0.86rem; color: var(--text-muted); line-height: 1.5; }
+.atlas-review-suggestion { font-size: 0.86rem; color: var(--text); line-height: 1.5; margin-top: 0.25rem; }
+.atlas-review-suggestion em { color: var(--accent); font-style: normal; font-weight: 600; }
+.atlas-review-foot { font-size: 0.8rem; color: var(--text-dim); margin: 0.7rem 0 0; line-height: 1.5; }
 .atlas-reqview-head { display: flex; align-items: center; gap: 0.75rem; padding: 0.6rem 1rem; border-bottom: 1px solid var(--border); }
 .atlas-reqview-name { flex: 1; background: transparent; border: none; color: var(--text); font-size: 1.05rem; font-weight: 700; }
 .atlas-reqview-name:focus { outline: none; }
