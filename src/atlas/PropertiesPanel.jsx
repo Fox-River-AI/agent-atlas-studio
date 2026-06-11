@@ -12,11 +12,24 @@ function Field({ label, hint, children }) {
   );
 }
 
-export default function PropertiesPanel({ node, onChange, errors, idError, dirty, canSave, onSave, onRevert, newObject }) {
+// Mirrors the left pane's "MODEL ⟨" header — an orange title + collapse control,
+// here labelled "Properties ⟩" (collapses to the right).
+function PanelHead({ title, dirty, onCollapse, children }) {
+  return (
+    <div className="atlas-panel-head">
+      <button className="atlas-palette-collapse" onClick={onCollapse} title="Collapse properties">⟩</button>
+      <span className="atlas-palette-title">{title}{dirty && <span className="atlas-dirty-dot" title="Unsaved changes"> ●</span>}</span>
+      {children}
+    </div>
+  );
+}
+
+export default function PropertiesPanel({ node, onChange, errors, idError, dirty, canSave, onSave, onRevert, newObject, onCollapse }) {
   if (!node) {
     return (
       <div className="atlas-panel empty">
-        <p>Select a node to edit it, or add an Agent or Tool from the toolbar.</p>
+        <PanelHead title="PROPERTIES" onCollapse={onCollapse} />
+        <p className="atlas-panel-emptymsg">Select a node to edit it, or add an Agent or Tool from the model tree.</p>
       </div>
     );
   }
@@ -32,8 +45,11 @@ export default function PropertiesPanel({ node, onChange, errors, idError, dirty
     // autoCapitalize/Correct/spellCheck off so ids like "db-connect" aren't
     // mangled to "Db-connect" by the webview (WebKit inherits these to inputs).
     <div className="atlas-panel" autoCapitalize="off" autoCorrect="off" spellCheck={false}>
-      <div className="atlas-panel-bar">
-        <h3>{{ orchestrator: 'Orchestrator', task: 'Task', agent: 'Agent', tool: 'MCP Tool', job: 'Job', system: 'External System', router: 'Router' }[node.type] || node.type}{dirty && <span className="atlas-dirty-dot" title="Unsaved changes"> ●</span>}</h3>
+      <PanelHead
+        title={({ orchestrator: 'ORCHESTRATOR', task: 'TASK', agent: 'AGENT', tool: 'MCP TOOL', job: 'JOB', system: 'EXTERNAL SYSTEM', router: 'ROUTER' }[node.type] || node.type).toUpperCase()}
+        dirty={dirty}
+        onCollapse={onCollapse}
+      >
         <div className="atlas-panel-actions">
           <button className="atlas-revert" onClick={onRevert} disabled={!dirty} title={newObject ? 'Discard this new object' : 'Revert changes'}>
             {newObject ? 'Discard' : 'Revert'}
@@ -49,7 +65,7 @@ export default function PropertiesPanel({ node, onChange, errors, idError, dirty
             Save
           </button>
         </div>
-      </div>
+      </PanelHead>
 
       {node.type === 'task' ? (
         <>

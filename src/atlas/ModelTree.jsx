@@ -137,6 +137,7 @@ export default function ModelTree({
   onCreate, collapsed, onToggleCollapse, onOpenSettings, onOpenAbout,
   inSubjectArea, canDelete, hiddenIds, onGoTo, onToggleHide, onDelete,
   hiddenCount = 0, onShowAllInView, onAddChild, onAddTopLevel,
+  projectName, onRenameProject,
 }) {
   // Roots = objects whose parent is not in the current (possibly SA-filtered)
   // set. In "All" that's the orchestrator; in a Subject Area it's the member
@@ -191,6 +192,17 @@ export default function ModelTree({
         <span className="atlas-palette-title">MODEL</span>
         <button className="atlas-palette-collapse" onClick={onToggleCollapse} title="Collapse">⟨</button>
       </div>
+      {onRenameProject && (
+        <input
+          className="atlas-palette-name"
+          value={projectName || ''}
+          onChange={(e) => onRenameProject(e.target.value)}
+          placeholder="Untitled model"
+          title="Model name — shared with the requirements project"
+          aria-label="Model name"
+          spellCheck={false}
+        />
+      )}
 
       <div className="atlas-sa">
         <label>Subject Area</label>

@@ -22,6 +22,20 @@ import './atlas.css';
 import { SEED_OBJECTS, SEED_EDGES, SEED_EXPANDED, SEED_SUBJECT_AREAS } from './seedModel';
 import { loadModel, saveModel, clearModel, saveRecovery, loadRecovery, clearRecovery } from './persistence';
 
+// The primary navigation. `ready` sections are live; the rest are the roadmap
+// (Monitoring / Reverse Engineering / Comparison) shown as tabs now so the nav
+// shape is visible — they render a "coming soon" placeholder until built.
+const SECTIONS = [
+  { id: 'requirements', label: 'Requirements', ready: true },
+  { id: 'model', label: 'Model', ready: true },
+  { id: 'monitoring', label: 'Monitoring', ready: false,
+    blurb: 'Live dashboards from the telemetry each agent manifest declares.' },
+  { id: 'reverse', label: 'Reverse Eng', ready: false,
+    blurb: 'Recover the running system’s agent/tool/system graph from OTel traces and diff it against the declared model.' },
+  { id: 'compare', label: 'Compare', ready: false,
+    blurb: 'Diff two models — versions, or declared-vs-discovered.' },
+];
+
 export default function UnifiedModeler() {
   const { endpointUrl } = useTheme();
   // Render the demo seed first; if a saved model exists on disk it's loaded
@@ -37,6 +51,7 @@ export default function UnifiedModeler() {
   const [treeCollapsed, setTreeCollapsed] = useState(false);
   const [panelOpen, setPanelOpen] = useState(true);
   const [modal, setModal] = useState(null); // 'settings' | 'about'
+  const [actionsOpen, setActionsOpen] = useState(false); // ⋯ Actions menu
   // Left-panel section (DIAG-38): 'requirements' (doc editor) | 'model' (graph).
   const [section, setSection] = useState('model');
   // The single requirements project — { name, text } or null until created.
@@ -769,23 +784,21 @@ export default function UnifiedModeler() {
           <h1>Agent Atlas</h1>
         </div>
         <div className="atlas-section-switch" role="tablist">
-          <button role="tab" className={section === 'requirements' ? 'active' : ''}
-            onClick={() => guardedNavigate(() => setSection('requirements'))}>Requirements</button>
-          <button role="tab" className={section === 'model' ? 'active' : ''}
-            onClick={() => setSection('model')}>Model</button>
+          {SECTIONS.map((s) => (
+            <button
+              key={s.id}
+              role="tab"
+              className={`${section === s.id ? 'active' : ''}${s.ready ? '' : ' soon'}`}
+              title={s.ready ? '' : `${s.blurb} (coming soon)`}
+              onClick={() => guardedNavigate(() => setSection(s.id))}
+            >
+              {s.label}{!s.ready && <span className="atlas-soon-dot" aria-hidden="true">·</span>}
+            </button>
+          ))}
         </div>
-        {section === 'model' && (
-          <input
-            className="atlas-project-name"
-            value={projectName}
-            onChange={(e) => renameProject(e.target.value)}
-            title="Model name — shared with the requirements project"
-            aria-label="Model name"
-            spellCheck={false}
-          />
-        )}
-        <div className="atlas-actions" style={{ visibility: section === 'model' ? 'visible' : 'hidden' }}>
-          {allValid ? (
+        <div className="atlas-toolbar-spacer" />
+        <div className="atlas-actions">
+          {section === 'model' && (allValid ? (
             <span className="atlas-status ok">✓ registry valid</span>
           ) : (
             <button
@@ -795,15 +808,33 @@ export default function UnifiedModeler() {
             >
               ✗ {issueCount} issue(s) {showIssues ? '▴' : '▾'}
             </button>
+          ))}
+          <div className="atlas-menu-wrap">
+            <button className="atlas-menu-btn" onClick={() => setActionsOpen((o) => !o)}
+              title="Actions" aria-haspopup="menu" aria-expanded={actionsOpen}>⋯</button>
+            {actionsOpen && (
+              <>
+                <div className="atlas-menu-backdrop" onClick={() => setActionsOpen(false)} />
+                <div className="atlas-menu" role="menu">
+                  <button role="menuitem" disabled={!allValid}
+                    onClick={() => { setActionsOpen(false); exportRegistry(); }}>Export registry</button>
+                  <button role="menuitem" disabled={!allValid}
+                    title="Registry + CLAUDE.md + hooks — a project a coding agent can build in"
+                    onClick={() => { setActionsOpen(false); exportBundle(); }}>Export build bundle</button>
+                  <div className="atlas-menu-sep" />
+                  <button role="menuitem"
+                    onClick={() => { setActionsOpen(false); setModal('reset'); }}
+                    title="Discard saved changes and reload the demo model">Reset to demo</button>
+                </div>
+              </>
+            )}
+          </div>
+          {!panelOpen && (
+            <button className="atlas-panel-toggle" onClick={() => setPanelOpen(true)}
+              title="Show properties panel">
+              ⟨ Properties
+            </button>
           )}
-          <button className="primary" onClick={exportRegistry} disabled={!allValid}>Export registry</button>
-          <button className="primary" onClick={exportBundle} disabled={!allValid} title="Registry + CLAUDE.md + hooks — a project a coding agent can build in">Export build bundle</button>
-          <button className="atlas-panel-toggle" onClick={() => setModal('reset')}
-            title="Discard saved changes and reload the demo model">Reset to demo</button>
-          <button className="atlas-panel-toggle" onClick={() => setPanelOpen((o) => !o)}
-            title={panelOpen ? 'Collapse properties panel' : 'Show properties panel'}>
-            {panelOpen ? 'Panel ⟩' : '⟨ Panel'}
-          </button>
         </div>
       </div>
 
@@ -896,6 +927,19 @@ export default function UnifiedModeler() {
           onGenerate={generateFromRequirements}
           endpointConfigured={!!endpointUrl}
         />
+       ) : section !== 'model' ? (
+        (() => {
+          const s = SECTIONS.find((x) => x.id === section);
+          return (
+            <div className="atlas-soon-view">
+              <div className="atlas-soon-card">
+                <h2>{s?.label}</h2>
+                <p>{s?.blurb}</p>
+                <p className="atlas-empty">Coming soon. This is part of the design → build → monitor → reverse-engineer loop.</p>
+              </div>
+            </div>
+          );
+        })()
        ) : (
         <>
         <ModelTree
@@ -913,6 +957,8 @@ export default function UnifiedModeler() {
           onCreate={(kind) => guardedNavigate(() => setCreateKind(kind))}
           collapsed={treeCollapsed}
           onToggleCollapse={() => setTreeCollapsed((c) => !c)}
+          projectName={projectName}
+          onRenameProject={renameProject}
           onOpenSettings={() => setModal('settings')}
           onOpenAbout={() => setModal('about')}
           inSubjectArea={!!currentSA}
@@ -961,6 +1007,7 @@ export default function UnifiedModeler() {
               }
             }}
             newObject={pendingNew === draft?.id}
+            onCollapse={() => setPanelOpen(false)}
           />
         )}
         </>
