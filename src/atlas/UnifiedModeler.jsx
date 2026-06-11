@@ -258,6 +258,17 @@ export default function UnifiedModeler() {
     const provider = httpEndpointProvider(endpointUrl);
     const { model: raw, notes } = await provider.generateModel(text);
     const { model, problems } = normalizeGeneratedModel(raw);
+    // GUARD: a failed/parse-error/truncated generation degrades to an empty
+    // envelope, which normalizes to a LONE ORCHESTRATOR. Never silently replace a
+    // real model with that — keep what's there and surface the error instead.
+    const realObjects = Object.values(model.objects).filter((o) => o.kind !== 'orchestrator').length;
+    if (realObjects === 0) {
+      const why = notes.find((n) => /cut off|token limit|parse|did not return|could not/i.test(n))
+        || 'The generator returned no objects.';
+      const e = new Error(`Generation produced an empty model — your current model was kept. ${why}`);
+      e.code = 'empty-generation';
+      throw e;
+    }
     // Snapshot the model we're about to overwrite (one-step undo).
     setModelUndo({ objects, edges, expanded, subjectAreas, layouts, viewports });
     applyGeneratedModel(model);
