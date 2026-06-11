@@ -14,7 +14,7 @@ import { useTheme } from './ThemeContext';
 import { httpEndpointProvider } from './modelProvider';
 import { normalizeGeneratedModel } from './normalizeModel';
 import { VALIDATORS, formatErrors, DEFAULT_MODEL } from './schema';
-import { manifestFor, buildRegistry, buildBundle, crossChecks } from './model';
+import { manifestFor, buildRegistry, buildBundle, buildDataDictionary, crossChecks } from './model';
 import { blankData, CREATABLE_KINDS } from './blankData';
 import { canConnect, connectionReason, parentKindsFor } from './relationships';
 import { namedIssues } from './validationMessages';
@@ -741,6 +741,37 @@ export default function UnifiedModeler() {
     setExportMsg(`Build bundle (${count} files) downloaded — unzip to a folder, then open it in your coding agent.`);
   };
 
+  // Step 4: export the model AS a human-readable GOVERNANCE DATA DICTIONARY —
+  // the conformance artifact an auditor / compliance officer reads (Markdown,
+  // generated from the model so it can't drift). Single file: Tauri save dialog
+  // or browser download.
+  const exportDataDictionary = async () => {
+    if (!asNodes.length) { setExportMsg('Nothing to export yet — add some objects.'); return; }
+    const md = buildDataDictionary(asNodes, edges, projectName);
+    const fname = `${(projectName || 'model').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'model'}-governance.md`;
+    const isTauri = typeof window !== 'undefined' && !!window.__TAURI_INTERNALS__;
+    if (isTauri) {
+      try {
+        const { save } = await import('@tauri-apps/plugin-dialog');
+        const { writeTextFile } = await import('@tauri-apps/plugin-fs');
+        const path = await save({ defaultPath: fname, filters: [{ name: 'Markdown', extensions: ['md'] }] });
+        if (!path) { setExportMsg('Export cancelled.'); return; }
+        await writeTextFile(path, md);
+        setExportMsg(`Governance data dictionary written → ${path}`);
+      } catch (e) {
+        setExportMsg(`Data dictionary export failed: ${e?.message || e}`);
+      }
+      return;
+    }
+    const blob = new Blob([md], { type: 'text/markdown' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = fname;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    setExportMsg('Governance data dictionary downloaded (check your browser downloads).');
+  };
+
   const selected = selectedId ? objects[selectedId] : null;
 
   // Validate the DRAFT (substitute its data into the node list) so the panel's
@@ -830,6 +861,9 @@ export default function UnifiedModeler() {
                   <button role="menuitem" disabled={!allValid}
                     title="Registry + CLAUDE.md + hooks — a project a coding agent can build in"
                     onClick={() => { setActionsOpen(false); exportBundle(); }}>Export build bundle</button>
+                  <button role="menuitem"
+                    title="Human-readable governance document generated from the model — for auditors / compliance review"
+                    onClick={() => { setActionsOpen(false); exportDataDictionary(); }}>Export governance dictionary</button>
                   <div className="atlas-menu-sep" />
                   <button role="menuitem"
                     onClick={() => { setActionsOpen(false); setModal('reset'); }}
