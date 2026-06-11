@@ -12,6 +12,62 @@
 import { blankData } from './blankData';
 
 const KINDS = new Set(['orchestrator', 'task', 'agent', 'tool', 'job', 'system', 'router']);
+const SEMVER = /^\d+\.\d+\.\d+$/;
+
+// Repair the handful of fields that have HARD schema constraints, in place.
+// These are the shapes a generator most often drifts on (observed: non-semver
+// version on every object; agent `model` not matching the pinned-OR-router
+// oneOf). We coerce to a valid default and record what changed — fixing shape,
+// not inventing intent. Everything else stays as returned (editable, validatable).
+function sanitizeData(kind, data, id, problems) {
+  // version: schema requires ^\d+\.\d+\.\d+$ on every kind except task.
+  if (kind !== 'task') {
+    if (typeof data.version !== 'string' || !SEMVER.test(data.version)) {
+      const bad = data.version;
+      // "1.0" → "1.0.0"; "v2" / garbage → "1.0.0"
+      const m = typeof data.version === 'string' && data.version.match(/^(\d+)(?:\.(\d+))?(?:\.(\d+))?/);
+      data.version = m ? `${m[1]}.${m[2] || 0}.${m[3] || 0}` : '1.0.0';
+      if (bad !== data.version) problems.push(`“${id}”: version “${bad ?? '(missing)'}” → “${data.version}” (must be MAJOR.MINOR.PATCH).`);
+    }
+  }
+  // agent model: exactly one of a pinned-model object {provider,name,pinned} OR a
+  // router reference {router}. Generators often emit a fuller/looser object.
+  if (kind === 'agent') {
+    const m = data.model;
+    const hasRouterRef = m && typeof m === 'object' && typeof m.router === 'string' && m.router;
+    const hasPinned = m && typeof m === 'object' && m.provider && m.name && m.pinned;
+    if (hasRouterRef && !hasPinned) {
+      data.model = { router: m.router }; // strip any extra keys the schema forbids
+    } else if (hasPinned) {
+      // keep only the allowed pinned-model keys (drop additionalProperties)
+      const clean = { provider: m.provider, name: m.name, pinned: m.pinned };
+      if (m.parameters && typeof m.parameters === 'object') clean.parameters = m.parameters;
+      data.model = clean;
+    } else {
+      // Couldn't tell — fall back to the blank default model; the human refines it.
+      // (blankData already seeded a valid model; this catches a returned-but-broken one.)
+      if (m !== undefined) problems.push(`“${id}”: model was neither a complete pinned model nor a {router} ref — reset to the default model; set it in the panel.`);
+      data.model = { ...blankData('agent').model };
+    }
+  }
+  // router: candidates must be an array of {provider,name[,pinned]}; policy an object.
+  if (kind === 'router') {
+    if (!Array.isArray(data.candidates)) {
+      problems.push(`“${id}”: router candidates were not a list — reset to defaults; set them in the panel.`);
+      data.candidates = [...blankData('router').candidates];
+    }
+    // policy fields in the studio's data shape are optimizeFor/rules/fallback;
+    // a generator may emit a nested `policy` object — flatten the known keys.
+    if (data.policy && typeof data.policy === 'object') {
+      const p = data.policy;
+      if (Array.isArray(p.optimize_for) && !data.optimizeFor) data.optimizeFor = p.optimize_for;
+      if (Array.isArray(p.rules) && !data.rules) data.rules = p.rules;
+      if (typeof p.fallback === 'string' && !data.fallback) data.fallback = p.fallback;
+      delete data.policy;
+      problems.push(`“${id}”: router policy was nested — flattened to the editable fields.`);
+    }
+  }
+}
 
 export function normalizeGeneratedModel(raw) {
   const problems = [];
@@ -35,6 +91,11 @@ export function normalizeGeneratedModel(raw) {
     // renders as an invalid-but-editable node rather than crashing. Keep data.id
     // in sync with the object id.
     const data = { ...blankData(o.kind), ...(o.data && typeof o.data === 'object' ? o.data : {}), id };
+    // Defensive field guards: a generator (any backend) can drift from the schema.
+    // Coerce the few HARD-constrained fields back to valid so a draft lands clean
+    // instead of as dozens of identical validation errors. Each repair is surfaced
+    // in `problems` — we fix shape, never invent intent.
+    sanitizeData(o.kind, data, id, problems);
     objects[id] = { id, kind: o.kind, parent: o.parent ?? null, data };
   }
 
