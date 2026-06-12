@@ -70,20 +70,57 @@ export default function ReverseEngineeringView({ endpointUrl, onReviewText, onAd
   const scan = async () => {
     if (!endpointUrl) { setErr('No scan endpoint configured. Set the model endpoint in Settings.'); return; }
     const body = customPath.trim() ? { root: customPath.trim() } : (target ? { preset: target } : {});
-    setErr(null); setResult(null); setReview(null); setBusy(true);
+    const repoLabel = customPath.trim() || target || 'backend';
+    setErr(null); setReview(null); setBusy(true);
     try {
       const res = await fetch(scanUrl, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
       if (!res.ok) throw new Error(`Scan endpoint returned ${res.status} ${res.statusText}.`);
       const json = await res.json();
       const { model } = normalizeGeneratedModel(json.declaration || {});
-      setResult({ model, notes: json.notes || [], scannedRoot: json.scannedRoot });
-      // Pre-fill the orchestration question with the inferred orchestrator if any.
-      const inferred = Object.values(model.objects).find((o) => o.kind === 'orchestrator');
-      setOrchId(inferred ? inferred.id : '');
+      // Noesis is ONE system across repos — ACCUMULATE into the recovered estate
+      // rather than replace. Dedupe by id (the same datastore/tool/agent touched by
+      // two repos is ONE object); tag each object with the repo it came from; keep a
+      // single orchestrator (the union's control plane) and re-parent. Re-scanning
+      // the same repo refreshes its objects.
+      setResult((prev) => mergeScan(prev, model, repoLabel, json.notes || []));
     } catch (e) {
       setErr(`Could not reach the scan endpoint (${scanUrl}). Check the backend is running and CORS-open. [${e?.message || e}]`);
     } finally { setBusy(false); }
   };
+
+  // Merge a fresh scan into the accumulated recovered estate.
+  function mergeScan(prev, model, repo, notes) {
+    const objects = { ...(prev?.model.objects || {}) };
+    const scannedRepos = [...new Set([...(prev?.scannedRepos || []), repo])];
+    const newObjs = Object.values(model.objects);
+    // Pick/keep a single union orchestrator.
+    let orch = Object.values(objects).find((o) => o.kind === 'orchestrator');
+    for (const o of newObjs) {
+      if (o.kind === 'orchestrator') {
+        if (!orch) { orch = { ...o, id: 'noesis-recovered-orchestrator', data: { ...o.data, id: 'noesis-recovered-orchestrator', description: 'Inferred union control plane across the scanned repos.' } }; objects[orch.id] = orch; }
+        continue; // drop per-repo orchestrators in favor of the single union one
+      }
+      const tagged = { ...o, data: { ...o.data, _repo: repo } };
+      // dedupe by id: an existing object (same datastore/tool) is kept; we just
+      // append the repo tag so it's clear both repos touch it.
+      if (objects[o.id]) {
+        const ex = objects[o.id];
+        const repos = new Set([...(String(ex.data?._repo || '').split(',').filter(Boolean)), repo]);
+        ex.data._repo = [...repos].join(',');
+      } else {
+        objects[o.id] = tagged;
+      }
+    }
+    // re-parent every rootless non-orchestrator object under the union orchestrator
+    if (orch) for (const o of Object.values(objects)) {
+      if (o.kind !== 'orchestrator' && !o.parent) o.parent = orch.id;
+    }
+    if (orch) setOrchId(orch.id);
+    const allNotes = [...(prev?.notes || []), ...notes.map((n) => `[${repo}] ${n}`)];
+    return { model: { objects, edges: prev?.model.edges || [], subjectAreas: [] }, notes: allNotes, scannedRepos };
+  }
+
+  const clearScan = () => { setResult(null); setReview(null); };
 
   const objs = result ? Object.values(result.model.objects) : [];
   const byKind = (k) => objs.filter((o) => o.kind === k);
@@ -96,6 +133,7 @@ export default function ReverseEngineeringView({ endpointUrl, onReviewText, onAd
   const applyIntake = (model) => {
     const objects = JSON.parse(JSON.stringify(model.objects));
     const list = Object.values(objects);
+    for (const o of list) { if (o.data && '_repo' in o.data) delete o.data._repo; } // strip UI-only tag
     const orch = orchId && objects[orchId] && objects[orchId].kind === 'orchestrator' ? objects[orchId] : list.find((o) => o.kind === 'orchestrator');
     if (orch) {
       if (regimes.length) orch.data.complianceRegimes = regimes;
@@ -174,7 +212,7 @@ export default function ReverseEngineeringView({ endpointUrl, onReviewText, onAd
           <input className="atlas-re-custompath" value={customPath} onChange={(e) => setCustomPath(e.target.value)}
             placeholder="…or a custom host path" title="Absolute path on the backend host; overrides the preset" />
           <button className="primary" onClick={scan} disabled={busy || !endpointUrl}>
-            {busy ? 'Scanning…' : '⟲ Scan'}
+            {busy ? 'Scanning…' : (result ? '+ Add repo' : '⟲ Scan')}
           </button>
         </div>
       </div>
@@ -217,14 +255,17 @@ export default function ReverseEngineeringView({ endpointUrl, onReviewText, onAd
           </div>
 
           <div className="atlas-re-summary">
-            <span className="atlas-re-scanned">Scanned <code>{result.scannedRoot}</code></span>
+            <span className="atlas-re-scanned">
+              Scanned: {(result.scannedRepos || []).map((r) => <code key={r}>{r}</code>).reduce((a, b) => a === null ? [b] : [...a, ' · ', b], null)}
+              <button className="atlas-re-clear" onClick={clearScan} title="Clear and start a fresh recovery">clear</button>
+            </span>
             <div className="atlas-re-counts">
               <span>{counts.agents} agents</span><span>{counts.tools} tools</span><span>{counts.systems} systems</span>
             </div>
             <button className="atlas-re-review" onClick={runReview} disabled={reviewBusy || !onReviewText}>
               {reviewBusy ? 'Reviewing…' : '✓ Review for governance gaps'}
             </button>
-            {onAdopt && <button className="atlas-re-adopt" onClick={adopt} title="Load into the Declaration tab to ratify and govern">Adopt as declaration →</button>}
+            {onAdopt && <button className="atlas-re-adopt" onClick={adopt} title="Load the union of all scanned repos into the Declaration tab to ratify and govern">Adopt as declaration →</button>}
           </div>
 
           <div className="atlas-re-cols">
@@ -236,6 +277,7 @@ export default function ReverseEngineeringView({ endpointUrl, onReviewText, onAd
                   {byKind(kind).map((o) => (
                     <div key={o.id} className="atlas-re-obj">
                       <span className="atlas-re-objid">{o.id}</span>
+                      {o.data?._repo && <span className="atlas-re-repo">{o.data._repo}</span>}
                       {kind === 'system' && <span className="atlas-re-objmeta">{o.data.systemKind} · {o.data.connection || 'hint —'}</span>}
                       <span className={`atlas-re-${o.data?.governance?.residency || regimes.length ? 'partial' : 'ungoverned'}`}>
                         {o.data?.governance?.residency || (kind === 'system' && residency) ? '◑ partial' : '⚠ ungoverned'}
