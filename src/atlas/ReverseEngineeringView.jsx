@@ -44,8 +44,12 @@ export default function ReverseEngineeringView({ endpointUrl, onReviewText, onAd
   // pre-know them. A repo is { label, path, preset? }. Presets are convenience
   // shortcuts ("this deployment's known repos"), not the only way in.
   const [repos, setRepos] = useState([]);        // the set to scan
-  const [presets, setPresets] = useState([]);    // optional shortcuts from the backend
+  const [presets, setPresets] = useState([]);    // optional example shortcuts (this deployment)
+  const [browseRoot, setBrowseRoot] = useState('');
   const [pathInput, setPathInput] = useState(''); // free-text path being typed
+  // Host folder browser: navigate the SCANNER host's filesystem to pick repos.
+  const [browse, setBrowse] = useState(null); // { path, parent, entries } | null
+  const [browseBusy, setBrowseBusy] = useState(false);
 
   const base = (suffix) => (endpointUrl ? endpointUrl.replace(/generate-model\/?$/, suffix) : '');
   const scanUrl = base('scan-codebase');
@@ -60,11 +64,27 @@ export default function ReverseEngineeringView({ endpointUrl, onReviewText, onAd
         const res = await fetch(base('scan-presets'));
         if (!res.ok) return;
         const j = await res.json();
-        if (!cancelled) setPresets(j.presets || []);
+        if (!cancelled) { setPresets(j.presets || []); setBrowseRoot(j.browseRoot || ''); }
       } catch { /* shortcuts are optional */ }
     })();
     return () => { cancelled = true; };
   }, [endpointUrl]);
+
+  // Open / navigate the scanner-host folder browser.
+  const openBrowse = (path) => navigate(path || browseRoot || '');
+  const navigate = async (path) => {
+    setErr(null); setBrowseBusy(true);
+    try {
+      const res = await fetch(base('list-dir'), { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ path: path || undefined }) });
+      if (!res.ok) { const t = await res.text().catch(() => ''); throw new Error(`Browse failed: ${res.status} ${t.slice(0, 120)}`); }
+      setBrowse(await res.json());
+    } catch (e) {
+      setErr(`Could not browse the scanner host. [${e?.message || e}]`);
+    } finally { setBrowseBusy(false); }
+  };
+  const addBrowsedRepo = (entry) => {
+    addRepo({ label: entry.name, path: entry.path });
+  };
 
   const addRepo = (repo) => {
     setRepos((rs) => rs.some((r) => (r.preset && r.preset === repo.preset) || r.path === repo.path) ? rs : [...rs, repo]);
@@ -233,16 +253,54 @@ export default function ReverseEngineeringView({ endpointUrl, onReviewText, onAd
           </ul>
         )}
         <div className="atlas-re-repoadd">
+          <button className="atlas-re-browsebtn" onClick={() => openBrowse()} disabled={!endpointUrl} title="Browse the scanner host's filesystem to pick repo folders">🗀 Browse host…</button>
           <input value={pathInput} onChange={(e) => setPathInput(e.target.value)}
             onKeyDown={(e) => { if (e.key === 'Enter') addTypedPath(); }}
-            placeholder="Add a codebase path on the backend host (e.g. /home/exx/myCode/noesis-gateway)" />
+            placeholder="…or type a path on the scanner host" />
           <button onClick={addTypedPath} disabled={!pathInput.trim()}>+ Add path</button>
           {presets.filter((p) => p.available && !repos.some((r) => r.preset === p.id)).map((p) => (
             <button key={p.id} className="atlas-re-presetbtn" onClick={() => addRepo({ label: p.id, path: p.path, preset: p.id })}
-              title={p.path}>+ {p.id}</button>
+              title={`example shortcut · ${p.path}`}>+ {p.id} (example)</button>
           ))}
         </div>
       </div>
+
+      {/* Host folder browser — navigates the SCANNER host's filesystem. */}
+      {browse && (
+        <div className="atlas-modal-backdrop" onClick={() => setBrowse(null)}>
+          <div className="atlas-modal atlas-re-browser" onClick={(e) => e.stopPropagation()}>
+            <div className="atlas-re-browser-head">
+              <h3>Scanner host — pick repo folders</h3>
+              <button className="atlas-re-browser-x" onClick={() => setBrowse(null)}>×</button>
+            </div>
+            <div className="atlas-re-browser-bar">
+              <button disabled={!browse.parent || browseBusy} onClick={() => navigate(browse.parent)} title="Up">↑</button>
+              <code className="atlas-re-browser-path">{browse.path}</code>
+            </div>
+            <div className="atlas-re-browser-list">
+              {browseBusy && <div className="atlas-empty">Loading…</div>}
+              {!browseBusy && browse.entries.length === 0 && <div className="atlas-empty">No subfolders here.</div>}
+              {!browseBusy && browse.entries.map((e) => (
+                <div key={e.path} className="atlas-re-browser-row">
+                  <button className="atlas-re-browser-open" onClick={() => navigate(e.path)} title="Open">
+                    🗀 {e.name} {e.isRepo && <span className="atlas-re-browser-repo">repo</span>}
+                  </button>
+                  <button className="atlas-re-browser-add" disabled={repos.some((r) => r.path === e.path)} onClick={() => addBrowsedRepo(e)}>
+                    {repos.some((r) => r.path === e.path) ? 'added' : '+ add'}
+                  </button>
+                </div>
+              ))}
+            </div>
+            <p className="atlas-re-browser-foot">
+              Browsing the <strong>scanner host</strong> ({browseRoot}). For code that lives in the cloud (AWS/Azure/GitHub),
+              clone it to this host first, then pick the clone here.
+            </p>
+            <div className="atlas-modal-actions">
+              <button onClick={() => setBrowse(null)}>Done</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {err && <div className="atlas-re-msg err">{err}</div>}
 

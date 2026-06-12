@@ -90,6 +90,25 @@
 .atlas-re-repoadd button { border: 1px solid var(--border-soft); background: var(--bg-elevated); color: var(--text); border-radius: 5px; padding: 0.35rem 0.7rem; font-size: 0.82rem; font-weight: 600; cursor: pointer; }
 .atlas-re-repoadd button:disabled { opacity: 0.45; cursor: default; }
 .atlas-re-presetbtn { color: var(--accent) !important; border-color: var(--accent) !important; }
+.atlas-re-browsebtn { font-weight: 600; }
+/* host folder browser modal */
+.atlas-re-browser { max-width: 38rem; width: 38rem; }
+.atlas-re-browser-head { display: flex; align-items: center; justify-content: space-between; }
+.atlas-re-browser-head h3 { margin: 0; color: var(--accent); }
+.atlas-re-browser-x { background: none; border: none; color: var(--text-muted); font-size: 1.3rem; cursor: pointer; line-height: 1; }
+.atlas-re-browser-bar { display: flex; align-items: center; gap: 0.5rem; margin: 0.6rem 0; }
+.atlas-re-browser-bar button { border: 1px solid var(--border-soft); background: var(--bg-elevated); color: var(--text); border-radius: 5px; padding: 0.2rem 0.55rem; cursor: pointer; }
+.atlas-re-browser-bar button:disabled { opacity: 0.4; cursor: default; }
+.atlas-re-browser-path { font-size: 0.78rem; color: var(--text-muted); flex: 1; overflow-x: auto; white-space: nowrap; }
+.atlas-re-browser-list { max-height: 40vh; overflow-y: auto; border: 1px solid var(--border-soft); border-radius: 6px; }
+.atlas-re-browser-row { display: flex; align-items: center; gap: 0.5rem; padding: 0.25rem 0.5rem; border-bottom: 1px solid var(--border-soft); }
+.atlas-re-browser-row:last-child { border-bottom: none; }
+.atlas-re-browser-open { flex: 1; text-align: left; background: none; border: none; color: var(--text); cursor: pointer; font-size: 0.88rem; padding: 0.15rem 0.25rem; }
+.atlas-re-browser-open:hover { color: var(--accent); }
+.atlas-re-browser-repo { font-size: 0.66rem; font-weight: 700; color: var(--accent); border: 1px solid var(--accent); border-radius: 4px; padding: 0 0.3rem; margin-left: 0.3rem; }
+.atlas-re-browser-add { border: 1px solid var(--accent); color: var(--accent); background: transparent; border-radius: 5px; padding: 0.12rem 0.5rem; font-size: 0.78rem; font-weight: 600; cursor: pointer; }
+.atlas-re-browser-add:disabled { opacity: 0.5; cursor: default; border-color: var(--border-soft); color: var(--text-muted); }
+.atlas-re-browser-foot { font-size: 0.8rem; color: var(--text-dim); line-height: 1.5; margin: 0.7rem 0 0; }
 .atlas-re-head button.primary { flex: none; border: none; border-radius: 6px; padding: 0.45rem 1rem; font-weight: 700; cursor: pointer; background: var(--accent); color: var(--accent-fg); font-size: 0.9rem; }
 .atlas-re-head button:disabled { opacity: 0.45; cursor: default; }
 .atlas-re-hint, .atlas-re-msg { padding: 0.5rem 1.5rem; font-size: 0.88rem; }
