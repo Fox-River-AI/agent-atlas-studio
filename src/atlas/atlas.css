@@ -76,6 +76,10 @@
 .atlas-re-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; padding: 1rem 1.5rem 0.75rem; border-bottom: 1px solid var(--border-soft); }
 .atlas-re-head h2 { margin: 0; color: var(--accent); font-size: 1.25rem; }
 .atlas-re-sub { margin: 0.3rem 0 0; color: var(--text-muted); font-size: 0.9rem; max-width: 50rem; line-height: 1.5; }
+.atlas-re-target { display: flex; align-items: flex-end; gap: 0.5rem; flex: none; }
+.atlas-re-target label { display: flex; flex-direction: column; gap: 0.2rem; font-size: 0.74rem; color: var(--text-muted); }
+.atlas-re-target select { background: var(--bg-elevated); color: var(--text); border: 1px solid var(--border-soft); border-radius: 5px; padding: 0.35rem 0.5rem; font-size: 0.85rem; max-width: 22rem; }
+.atlas-re-custompath { background: var(--bg-elevated); color: var(--text); border: 1px solid var(--border-soft); border-radius: 5px; padding: 0.35rem 0.5rem; font-size: 0.85rem; width: 12rem; }
 .atlas-re-head button.primary { flex: none; border: none; border-radius: 6px; padding: 0.45rem 1rem; font-weight: 700; cursor: pointer; background: var(--accent); color: var(--accent-fg); font-size: 0.9rem; }
 .atlas-re-head button:disabled { opacity: 0.45; cursor: default; }
 .atlas-re-hint, .atlas-re-msg { padding: 0.5rem 1.5rem; font-size: 0.88rem; }

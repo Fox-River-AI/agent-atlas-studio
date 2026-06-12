@@ -15,7 +15,7 @@
 // Adopt → loads it into the Declaration tab to ratify and govern.
 //
 // Demo-isolated: own component, own endpoints; touches no demo-path code.
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { normalizeGeneratedModel } from './normalizeModel';
 
 const RESIDENCY = [
@@ -40,13 +40,39 @@ export default function ReverseEngineeringView({ endpointUrl, onReviewText, onAd
   const [reviewBusy, setReviewBusy] = useState(false);
   const [review, setReview] = useState(null);
 
-  const scanUrl = endpointUrl ? endpointUrl.replace(/generate-model\/?$/, 'scan-codebase') : '';
+  // Scan target: a named repo preset, or a custom host path.
+  const [presets, setPresets] = useState([]);
+  const [target, setTarget] = useState(''); // preset id
+  const [customPath, setCustomPath] = useState('');
+
+  const base = (suffix) => (endpointUrl ? endpointUrl.replace(/generate-model\/?$/, suffix) : '');
+  const scanUrl = base('scan-codebase');
+
+  // Discover the on-host repo presets so the operator picks a target, not a path.
+  useEffect(() => {
+    if (!endpointUrl) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(base('scan-presets'));
+        if (!res.ok) return;
+        const j = await res.json();
+        if (!cancelled) {
+          setPresets(j.presets || []);
+          const firstAvail = (j.presets || []).find((p) => p.available);
+          if (firstAvail) setTarget(firstAvail.id);
+        }
+      } catch { /* presets are optional; custom path still works */ }
+    })();
+    return () => { cancelled = true; };
+  }, [endpointUrl]);
 
   const scan = async () => {
     if (!endpointUrl) { setErr('No scan endpoint configured. Set the model endpoint in Settings.'); return; }
+    const body = customPath.trim() ? { root: customPath.trim() } : (target ? { preset: target } : {});
     setErr(null); setResult(null); setReview(null); setBusy(true);
     try {
-      const res = await fetch(scanUrl, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({}) });
+      const res = await fetch(scanUrl, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
       if (!res.ok) throw new Error(`Scan endpoint returned ${res.status} ${res.statusText}.`);
       const json = await res.json();
       const { model } = normalizeGeneratedModel(json.declaration || {});
@@ -134,9 +160,23 @@ export default function ReverseEngineeringView({ endpointUrl, onReviewText, onAd
             gaps are the work.</em>
           </p>
         </div>
-        <button className="primary" onClick={scan} disabled={busy || !endpointUrl}>
-          {busy ? 'Scanning…' : '⟲ Scan codebase'}
-        </button>
+        <div className="atlas-re-target">
+          <label>Codebase
+            <select value={target} onChange={(e) => { setTarget(e.target.value); setCustomPath(''); }} disabled={!!customPath.trim()}>
+              {presets.length === 0 && <option value="">— default (running backend) —</option>}
+              {presets.map((p) => (
+                <option key={p.id} value={p.id} disabled={!p.available}>
+                  {p.id}{p.available ? '' : ' (not on host)'} — {p.path}
+                </option>
+              ))}
+            </select>
+          </label>
+          <input className="atlas-re-custompath" value={customPath} onChange={(e) => setCustomPath(e.target.value)}
+            placeholder="…or a custom host path" title="Absolute path on the backend host; overrides the preset" />
+          <button className="primary" onClick={scan} disabled={busy || !endpointUrl}>
+            {busy ? 'Scanning…' : '⟲ Scan'}
+          </button>
+        </div>
       </div>
 
       {!endpointUrl && <div className="atlas-re-hint">Set the model endpoint in Settings — the scan URL is derived from it.</div>}
