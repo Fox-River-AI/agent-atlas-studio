@@ -150,7 +150,7 @@ export default function RequirementsView({
       const res = await onGenerate();
       if (res?.cancelled) { setBusy(false); return; }
       const notes = res?.notes || [];
-      setMsg(`Model generated from requirements. Switch to Model to refine it.${notes.length ? ` (${notes.length} note${notes.length === 1 ? '' : 's'} to confirm)` : ''}`);
+      setMsg(`Declaration generated from requirements. Switch to Declaration to refine it.${notes.length ? ` (${notes.length} note${notes.length === 1 ? '' : 's'} to confirm)` : ''}`);
     } catch (e2) {
       setErr(e2?.message || String(e2));
     } finally { setBusy(false); }
@@ -269,21 +269,21 @@ export default function RequirementsView({
             className="atlas-reqview-generate"
             onClick={generate}
             disabled={working || !requirements.text?.trim()}
-            title={endpointConfigured ? 'Seed the model from these requirements (replaces the current model)' : 'Set a model endpoint in Settings first'}
+            title={endpointConfigured ? 'Generate the declaration from these requirements (replaces the current declaration)' : 'Set a model endpoint in Settings first'}
           >
-            {busy ? `Generating… ${fmtElapsed(elapsed)}` : 'Generate model from requirements'}
+            {busy ? `Generating… ${fmtElapsed(elapsed)}` : 'Generate declaration from requirements'}
           </button>
         </div>
       </div>
 
       {!endpointConfigured && (
-        <div className="atlas-reqview-hint">No model endpoint set — add one in Settings to enable “Generate model”.</div>
+        <div className="atlas-reqview-hint">No model endpoint set — add one in Settings to enable “Generate declaration”.</div>
       )}
       {working && (
         <div className="atlas-reqview-msg working">
           <span className="atlas-spinner" aria-hidden="true" />
           {busy
-            ? 'Generating the model from your requirements — this can take a couple of minutes.'
+            ? 'Generating the declaration from your requirements — this can take a couple of minutes.'
             : 'Reviewing the document for governance gaps — about a minute.'}
           {' '}Elapsed {fmtElapsed(elapsed)}.
         </div>
@@ -330,8 +330,8 @@ export default function RequirementsView({
             “Apply” appends the suggested declaration into your document under
             <strong> Governance — to declare</strong>. Each blank shows as a yellow chip in
             Preview — <strong>click a chip</strong> (or use <strong>Next blank →</strong>) to jump
-            to it in Edit with the token selected; type your value, then Generate. The model only
-            fills governance the document states.
+            to it in Edit with the token selected; type your value, then Generate. The declaration
+            only fills governance the document states.
           </p>
         </div>
       )}
@@ -357,7 +357,7 @@ export default function RequirementsView({
         </div>
       )}
       <div className="atlas-reqview-foot">
-        Markdown · saved automatically · the model is generated from this document
+        Markdown · saved automatically · the declaration is generated from this document
       </div>
     </div>
   );

@@ -966,7 +966,7 @@ export default function UnifiedModeler() {
 
       {modelUndo && (
         <div className="atlas-undo-bar">
-          <span>Model was replaced by one generated from requirements.</span>
+          <span>The declaration was replaced by one generated from requirements.</span>
           <button onClick={undoGenerate}>Undo generate</button>
           <button className="atlas-undo-dismiss" onClick={() => setModelUndo(null)}>Dismiss</button>
         </div>
@@ -1256,9 +1256,9 @@ export default function UnifiedModeler() {
       {seedConfirm && (
         <div className="atlas-modal-backdrop" onClick={() => { seedConfirm.resolve(false); setSeedConfirm(null); }}>
           <div className="atlas-modal" onClick={(e) => e.stopPropagation()}>
-            <h2>Replace the current model?</h2>
+            <h2>Replace the current declaration?</h2>
             <p className="atlas-empty">
-              Generating from requirements builds a fresh model and <strong>replaces your
+              Generating from requirements builds a fresh declaration and <strong>replaces your
               current one</strong> ({seedConfirm.count} object{seedConfirm.count === 1 ? '' : 's'}).
               You can Undo immediately after.
             </p>
