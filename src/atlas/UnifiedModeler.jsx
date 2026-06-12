@@ -8,6 +8,7 @@ import JSZip from 'jszip';
 import UnifiedGraph from './UnifiedGraph';
 import PropertiesPanel from './PropertiesPanel';
 import MonitoringView from './MonitoringView';
+import ReverseEngineeringView from './ReverseEngineeringView';
 import ModelTree from './ModelTree';
 import RequirementsView from './RequirementsView';
 import { SettingsModal, AboutModal } from './Modals';
@@ -31,8 +32,8 @@ const SECTIONS = [
   { id: 'model', label: 'Declaration', ready: true },
   { id: 'monitoring', label: 'Monitoring', ready: true,
     blurb: 'Declared-vs-running conformance: replay a run, catch drift, attest.' },
-  { id: 'reverse', label: 'Reverse Eng', ready: false,
-    blurb: 'Recover the running system’s agent/tool/system graph from OTel traces and diff it against the declared model.' },
+  { id: 'reverse', label: 'Reverse Eng', ready: true,
+    blurb: 'Recover a declaration from an existing codebase, then surface what isn’t governed.' },
   { id: 'compare', label: 'Compare', ready: false,
     blurb: 'Diff two models — versions, or declared-vs-discovered.' },
 ];
@@ -1005,6 +1006,17 @@ export default function UnifiedModeler() {
         />
        ) : section === 'monitoring' ? (
         <MonitoringView />
+       ) : section === 'reverse' ? (
+        <ReverseEngineeringView
+          endpointUrl={endpointUrl}
+          onAdopt={(model) => {
+            // Load the recovered declaration into the Declaration tab to ratify +
+            // govern it. Reuses the same apply+undo path as a generated declaration.
+            setModelUndo({ objects, edges, expanded, subjectAreas, layouts, viewports });
+            applyGeneratedModel(model);
+            setSection('model');
+          }}
+        />
        ) : section !== 'model' ? (
         (() => {
           const s = SECTIONS.find((x) => x.id === section);
