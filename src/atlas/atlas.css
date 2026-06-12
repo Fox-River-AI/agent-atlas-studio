@@ -78,38 +78,44 @@
 .atlas-mon-controls button { border: 1px solid var(--border); border-radius: 6px; padding: 0.4rem 0.9rem; font-size: 0.88rem; font-weight: 600; cursor: pointer; background: var(--bg-elevated); color: var(--text); }
 .atlas-mon-controls button.primary { background: var(--accent); color: var(--accent-fg); border-color: var(--accent); }
 .atlas-mon-controls button:disabled { opacity: 0.45; cursor: default; }
-.atlas-mon-stats { display: flex; gap: 1.25rem; padding: 0.6rem 1.5rem; font-size: 0.9rem; }
+.atlas-mon-stats { display: flex; align-items: center; gap: 1.25rem; padding: 0.6rem 1.5rem; font-size: 0.9rem; }
+.atlas-mon-progress { flex: 1; max-width: 16rem; height: 6px; background: var(--bg-elevated); border-radius: 3px; overflow: hidden; }
+.atlas-mon-progress-bar { height: 100%; background: var(--accent); transition: width 0.12s linear; }
 .atlas-mon-stat { color: var(--text-muted); font-weight: 600; }
 .atlas-mon-stat.ok { color: var(--ok); }
 .atlas-mon-stat.bad { color: var(--bad); }
-.atlas-mon-body { flex: 1; display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; padding: 0 1.5rem 1.5rem; overflow: hidden; }
-.atlas-mon-coltitle { font-size: 0.78rem; letter-spacing: 1px; text-transform: uppercase; color: var(--text-dim); margin-bottom: 0.6rem; }
-.atlas-mon-trace, .atlas-mon-diff { overflow-y: auto; }
+.atlas-mon-stat.warn { color: #eab308; }
 
-/* span timeline */
-.atlas-mon-span { display: flex; align-items: center; gap: 0.6rem; padding: 0.45rem 0.7rem; margin-bottom: 0.35rem; border-radius: 6px; border: 1px solid var(--border-soft); background: var(--bg-elevated); font-size: 0.85rem; transition: opacity 0.2s, border-color 0.2s; }
-.atlas-mon-span.pending { opacity: 0.32; }
-.atlas-mon-span.ran { opacity: 1; }
-.atlas-mon-span.bad { border-color: var(--bad); box-shadow: 0 0 0 1px var(--bad) inset; }
-.atlas-mon-span-kind { font-family: ui-monospace, Menlo, monospace; font-size: 0.72rem; color: var(--text-dim); min-width: 5.5rem; }
-.atlas-mon-span-who { font-weight: 600; color: var(--text); flex: 1; }
-.atlas-mon-span-meta { font-size: 0.72rem; color: var(--text-muted); background: var(--bg); padding: 0.05rem 0.4rem; border-radius: 4px; }
-.atlas-mon-span-flag { color: var(--bad); font-weight: 700; font-size: 0.78rem; }
-.atlas-mon-span.missing { border-style: dashed; opacity: 0.85; }
-.atlas-mon-span.missing .atlas-mon-span-kind { color: var(--bad); }
-.atlas-attest-exportmsg { font-size: 0.85rem; color: var(--text-muted); margin: 0.4rem 0 0; }
+/* filters bar */
+.atlas-mon-filters { display: flex; align-items: center; gap: 1.25rem; padding: 0.5rem 1.5rem; border-top: 1px solid var(--border-soft); border-bottom: 1px solid var(--border-soft); }
+.atlas-mon-filters label { font-size: 0.85rem; color: var(--text-muted); display: flex; align-items: center; gap: 0.4rem; }
+.atlas-mon-filters select { background: var(--bg-elevated); color: var(--text); border: 1px solid var(--border-soft); border-radius: 5px; padding: 0.2rem 0.4rem; font-size: 0.85rem; }
+.atlas-mon-typetabs { display: inline-flex; border: 1px solid var(--border-soft); border-radius: 6px; overflow: hidden; }
+.atlas-mon-typetabs button { background: transparent; border: none; color: var(--text-muted); padding: 0.25rem 0.7rem; font-size: 0.82rem; cursor: pointer; }
+.atlas-mon-typetabs button + button { border-left: 1px solid var(--border-soft); }
+.atlas-mon-typetabs button.active { background: var(--bg-elevated); color: var(--text); font-weight: 600; }
 
-/* conformance diff */
-.atlas-mon-viol { border-left: 3px solid var(--bad); background: var(--bg-elevated); border-radius: 0 6px 6px 0; padding: 0.55rem 0.8rem; margin-bottom: 0.5rem; }
+/* findings list (scrolls) */
+.atlas-mon-findings { flex: 1; overflow-y: auto; padding: 0.9rem 1.5rem; }
+.atlas-mon-viol { border-left: 3px solid var(--bad); background: var(--bg-elevated); border-radius: 0 6px 6px 0; padding: 0.55rem 0.8rem; margin-bottom: 0.55rem; }
 .atlas-mon-viol.sev-critical { border-left-color: #ef4444; }
 .atlas-mon-viol.sev-high { border-left-color: #f97316; }
 .atlas-mon-viol.sev-medium { border-left-color: #eab308; }
-.atlas-mon-viol-head { display: flex; align-items: baseline; gap: 0.5rem; margin-bottom: 0.2rem; }
-.atlas-mon-sev { font-size: 0.68rem; font-weight: 800; letter-spacing: 0.5px; color: var(--bad); }
+.atlas-mon-viol.error { border-left-color: #38bdf8; }
+.atlas-mon-viol-head { display: flex; align-items: center; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.2rem; }
+.atlas-mon-tag { font-size: 0.62rem; font-weight: 800; letter-spacing: 0.5px; padding: 0.1rem 0.4rem; border-radius: 4px; }
+.atlas-mon-tag.violation { background: rgba(239,68,68,0.18); color: #ef4444; }
+.atlas-mon-tag.error { background: rgba(56,189,248,0.18); color: #38bdf8; }
+.atlas-mon-sev { font-size: 0.68rem; font-weight: 800; letter-spacing: 0.5px; color: var(--text-muted); }
+.atlas-mon-nist { font-size: 0.66rem; font-weight: 700; color: var(--accent); border: 1px solid var(--accent); border-radius: 4px; padding: 0.05rem 0.35rem; }
 .atlas-mon-rule { font-weight: 600; color: var(--text); font-size: 0.9rem; }
 .atlas-mon-viol-detail { font-size: 0.84rem; color: var(--text-muted); line-height: 1.45; }
-.atlas-mon-attest-cta { margin-top: 1rem; }
-.atlas-mon-attest-cta button { border: none; border-radius: 6px; padding: 0.55rem 1.1rem; font-weight: 700; cursor: pointer; background: var(--accent); color: var(--accent-fg); font-size: 0.95rem; }
+.atlas-mon-regime { font-size: 0.76rem; color: var(--text-dim); margin-top: 0.3rem; }
+.atlas-mon-regime em { color: var(--text-muted); font-style: italic; }
+.atlas-mon-footer { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: 0.8rem 1.5rem; border-top: 1px solid var(--border-soft); }
+.atlas-mon-footer .atlas-empty { font-size: 0.85rem; max-width: 46rem; }
+.atlas-mon-footer button { border: none; border-radius: 6px; padding: 0.55rem 1.1rem; font-weight: 700; cursor: pointer; background: var(--accent); color: var(--accent-fg); font-size: 0.95rem; flex: none; }
+.atlas-attest-exportmsg { font-size: 0.85rem; color: var(--text-muted); margin: 0.4rem 0 0; }
 
 /* attestation modal */
 .atlas-attest { max-width: 40rem; }
