@@ -20,7 +20,9 @@
 //     • object 34 completes with NO validation-agent span — the safety gate was
 //       silently skipped; the run "succeeded" anyway.
 //   SHADOW agent (ran but undeclared, Q4):
-//     • object 89 has a span from "rogue-export-agent", which is not in the registry.
+//     • object 89 has spans from "export-helper-agent" — a mundane-sounding agent
+//       nobody declared (a real shadow agent doesn't announce itself; the scary
+//       part is the absence of a manifest, not the name).
 
 const AGENTS = [
   { id: 'discovery-agent', stage: 'discover', tool: 'tool-oracle-extractor', conf: 0.96 },
@@ -97,8 +99,8 @@ function buildSpans() {
     // SHADOW (Q4): object 89 has spans from an agent that is NOT in the registry —
     // an undeclared participant that ran. Only a declaration layer can flag this.
     if (obj === 89) {
-      spans.push({ spanId: next(), kind: 'agent-step', objId, agentId: 'rogue-export-agent', stage: 'export', confidence: 0.9, refused: false });
-      spans.push({ spanId: next(), kind: 'tool-call', objId, agentId: 'rogue-export-agent', target: 'tool-external-ftp' });
+      spans.push({ spanId: next(), kind: 'agent-step', objId, agentId: 'export-helper-agent', stage: 'export', confidence: 0.9, refused: false });
+      spans.push({ spanId: next(), kind: 'tool-call', objId, agentId: 'export-helper-agent', target: 'tool-external-ftp' });
     }
   }
   return spans;

@@ -246,8 +246,13 @@ export function buildAttestation(nodes, edges, trace, result, stampISO) {
     nistFunctions: nistFns,
     verdict,
     counts: {
-      checks: result.totalChecks,
+      // Gates = the closed set of declared rules evaluated this run; it reconciles
+      // exactly: gates = passed + governance findings. Operational errors are a
+      // SEPARATE concern (a span can error without breaking a rule), so they are
+      // reported on their own line, not folded into the gate count.
+      gates: result.passCount + gov.length,
       passed: result.passCount,
+      governance: gov.length,
       violations: result.violations.length,
       omissions: (result.omissions || []).length,
       shadows: (result.shadows || []).length,

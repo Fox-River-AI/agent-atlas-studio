@@ -123,7 +123,7 @@ export default function MonitoringView() {
       <div className="atlas-mon-stats">
         <div className="atlas-mon-progress"><div className="atlas-mon-progress-bar" style={{ width: `${pct}%` }} /></div>
         <span className="atlas-mon-stat">{objectsSeen}/{trace.objectCount} objects</span>
-        <span className="atlas-mon-stat ok">{result.passCount.toLocaleString()} gates checked</span>
+        <span className="atlas-mon-stat ok">{result.passCount.toLocaleString()} gates passed</span>
         <span className="atlas-mon-stat bad">{vShown} violation{vShown === 1 ? '' : 's'}</span>
         <span className="atlas-mon-stat omit">{oShown} omission{oShown === 1 ? '' : 's'}</span>
         <span className="atlas-mon-stat shadow">{shShown} shadow</span>
@@ -187,15 +187,15 @@ export default function MonitoringView() {
             </div>
             <table className="atlas-attest-table">
               <tbody>
-                <tr><td>Model</td><td><code>{attestation.model}</code></td></tr>
+                <tr><td>System</td><td><code>{attestation.model}</code></td></tr>
                 <tr><td>Run</td><td><code>{attestation.runId}</code></td></tr>
                 <tr><td>Compliance regimes</td><td>{attestation.regimes.join(' · ')}</td></tr>
                 <tr><td>NIST AI RMF functions</td><td>{attestation.nistFunctions.join(' · ') || '—'}</td></tr>
-                <tr><td>Gates checked</td><td>{attestation.counts.passed.toLocaleString()} passed</td></tr>
+                <tr><td>Gates checked</td><td>{attestation.counts.gates.toLocaleString()} · {attestation.counts.passed.toLocaleString()} passed · {attestation.counts.governance} finding(s)</td></tr>
                 <tr><td>Governance findings</td><td>
                   {attestation.counts.violations} violation(s), {attestation.counts.omissions} omission(s) (skipped declared step), {attestation.counts.shadows} shadow agent(s)
                   — {attestation.counts.critical} critical, {attestation.counts.high} high, {attestation.counts.medium} medium</td></tr>
-                <tr><td>Operational errors</td><td>{attestation.counts.errors}</td></tr>
+                <tr><td>Operational errors</td><td>{attestation.counts.errors} (separate operational severity scale)</td></tr>
               </tbody>
             </table>
             <p className="atlas-attest-note">
@@ -220,11 +220,13 @@ function attestationMarkdown(a) {
   const lines = [];
   lines.push(`# Conformance Attestation — ${a.model}`);
   lines.push('');
+  lines.push(`**System:** \`${a.model}\` (the orchestrated agentic system)`);
+  lines.push('');
   lines.push(`**Verdict:** ${a.verdict}`);
   lines.push(`**Run:** ${a.runId}`);
   lines.push(`**Compliance regimes (declared):** ${a.regimes.join(', ')}`);
   lines.push(`**NIST AI RMF functions implicated:** ${a.nistFunctions.join(', ') || '—'}`);
-  lines.push(`**Result:** ${a.counts.passed.toLocaleString()} gates passed; ${a.counts.violations} violation(s), ${a.counts.omissions} omission(s), ${a.counts.shadows} shadow agent(s) — ${a.counts.critical} critical, ${a.counts.high} high, ${a.counts.medium} medium; ${a.counts.errors} operational error(s).`);
+  lines.push(`**Result:** ${a.counts.gates.toLocaleString()} declared gates checked = ${a.counts.passed.toLocaleString()} passed + ${a.counts.governance} governance finding(s) [${a.counts.violations} violation(s), ${a.counts.omissions} omission(s), ${a.counts.shadows} shadow agent(s); ${a.counts.critical} critical, ${a.counts.high} high, ${a.counts.medium} medium]. Operational errors (separate severity scale): ${a.counts.errors}.`);
   lines.push('');
   lines.push('_Declared-vs-running conformance: each finding ties an observed runtime span (or a declared step that produced none) to the registry rule it breached and the NIST AI RMF function it implicates. Specific regime control mappings (HIPAA / GDPR / EU AI Act / SOC 2) are produced as part of a governance assessment — this report states the structural function, not a legal conclusion._');
   lines.push('');
