@@ -145,9 +145,12 @@ export default function RequirementsView({
   };
 
   const generate = async () => {
-    setErr(null); setMsg(null); setBusy(true);
+    setErr(null); setMsg(null);
+    // Don't start busy/timer yet — onGenerate first shows the overwrite confirm and
+    // waits for the user. It calls onStart() the instant real generation begins, so
+    // the elapsed clock measures the work, not the time spent at the confirm dialog.
     try {
-      const res = await onGenerate();
+      const res = await onGenerate(() => setBusy(true));
       if (res?.cancelled) { setBusy(false); return; }
       const notes = res?.notes || [];
       setMsg(`Declaration generated from requirements. Switch to Declaration to refine it.${notes.length ? ` (${notes.length} note${notes.length === 1 ? '' : 's'} to confirm)` : ''}`);

@@ -259,15 +259,19 @@ export default function UnifiedModeler() {
   // and (if the existing model has content) confirm before replacing. After seeding,
   // the model is canonical and refined in Model mode. Returns { notes } / { cancelled }.
   const [modelUndo, setModelUndo] = useState(null); // { objects, edges, expanded, subjectAreas, layouts, viewports } | null
-  const generateFromRequirements = useCallback(async () => {
+  const generateFromRequirements = useCallback(async (onStart) => {
     const text = requirements?.text || '';
     if (!text.trim()) { const e = new Error('The requirements document is empty.'); throw e; }
-    // Confirm the overwrite if there's a real model already (more than a lone orchestrator).
+    // Confirm the overwrite if there's a real declaration already (more than a lone orchestrator).
     const meaningful = Object.values(objects).filter((o) => o.kind !== 'orchestrator').length;
     if (meaningful > 0) {
       const ok = await new Promise((resolve) => setSeedConfirm({ count: meaningful, resolve }));
       if (!ok) return { cancelled: true };
     }
+    // Real work begins NOW (after any confirm) — start the busy state/timer here so
+    // the elapsed clock measures the generation, not the user's think-time at the
+    // confirm dialog.
+    if (typeof onStart === 'function') onStart();
     const provider = httpEndpointProvider(endpointUrl);
     const { model: raw, notes } = await provider.generateModel(text);
     const { model, problems } = normalizeGeneratedModel(raw);
