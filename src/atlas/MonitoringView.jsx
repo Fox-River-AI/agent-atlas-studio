@@ -11,7 +11,7 @@
 // the two disagree."
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { CAUSEWAY_TRACE } from './conformance/traceFixture';
-import { DECLARED_NODES, DECLARED_EDGES } from './conformance/declaredFixture';
+import { DECLARED_NODES, DECLARED_EDGES, DECLARATION_META } from './conformance/declaredFixture';
 import { runConformance, buildAttestation } from './conformance/conformanceEngine';
 
 const SEV_RANK = { critical: 0, high: 1, medium: 2, info: 3 };
@@ -71,7 +71,12 @@ export default function MonitoringView() {
   const eShown = countShown('error');
   const objectsSeen = Math.min(trace.objectCount, Math.ceil((cursor / spans.length) * trace.objectCount));
 
-  const attestation = useMemo(() => buildAttestation(DECLARED_NODES, DECLARED_EDGES, trace, result), [result, trace]);
+  const attestation = useMemo(() => buildAttestation(DECLARED_NODES, DECLARED_EDGES, trace, result, DECLARATION_META), [result, trace]);
+  // Gates passed climbs WITH the replay (don't show the final total at 0/100).
+  // Passes aren't span-anchored individually (they're counted), so scale by
+  // replay progress; snap to the exact total when finished.
+  const gatesTotal = attestation.counts.gates;
+  const passedShown = finished ? result.passCount : Math.round(result.passCount * (cursor / spans.length));
 
   const [exportMsg, setExportMsg] = useState(null);
   const exportAttestation = async () => {
@@ -123,7 +128,7 @@ export default function MonitoringView() {
       <div className="atlas-mon-stats">
         <div className="atlas-mon-progress"><div className="atlas-mon-progress-bar" style={{ width: `${pct}%` }} /></div>
         <span className="atlas-mon-stat">{objectsSeen}/{trace.objectCount} objects</span>
-        <span className="atlas-mon-stat ok">{result.passCount.toLocaleString()} gates passed</span>
+        <span className="atlas-mon-stat ok">{passedShown.toLocaleString()} / {gatesTotal.toLocaleString()} gates passed</span>
         <span className="atlas-mon-stat bad">{vShown} violation{vShown === 1 ? '' : 's'}</span>
         <span className="atlas-mon-stat omit">{oShown} omission{oShown === 1 ? '' : 's'}</span>
         <span className="atlas-mon-stat shadow">{shShown} shadow</span>
@@ -187,7 +192,10 @@ export default function MonitoringView() {
             </div>
             <table className="atlas-attest-table">
               <tbody>
-                <tr><td>System</td><td><code>{attestation.model}</code></td></tr>
+                <tr><td>System</td><td><code>{attestation.system}</code></td></tr>
+                {attestation.declaration && (
+                  <tr><td>Declaration</td><td><code>{attestation.declaration.name} {attestation.declaration.version}</code> (ratified {attestation.declaration.ratifiedAt})</td></tr>
+                )}
                 <tr><td>Run</td><td><code>{attestation.runId}</code></td></tr>
                 <tr><td>Compliance regimes</td><td>{attestation.regimes.join(' · ')}</td></tr>
                 <tr><td>NIST AI RMF functions</td><td>{attestation.nistFunctions.join(' · ') || '—'}</td></tr>
@@ -220,7 +228,8 @@ function attestationMarkdown(a) {
   const lines = [];
   lines.push(`# Conformance Attestation — ${a.model}`);
   lines.push('');
-  lines.push(`**System:** \`${a.model}\` (the orchestrated agentic system)`);
+  lines.push(`**System:** \`${a.system}\` (the orchestrated agentic system)`);
+  if (a.declaration) lines.push(`**Declaration:** \`${a.declaration.name} ${a.declaration.version}\` (ratified ${a.declaration.ratifiedAt}) — the baseline this run was diffed against`);
   lines.push('');
   lines.push(`**Verdict:** ${a.verdict}`);
   lines.push(`**Run:** ${a.runId}`);

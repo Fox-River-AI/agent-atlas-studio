@@ -174,7 +174,7 @@ export default function ModelTree({
   if (collapsed) {
     return (
       <div className="atlas-palette collapsed">
-        <button className="atlas-palette-expand" onClick={onToggleCollapse} title="Show model tree">☰</button>
+        <button className="atlas-palette-expand" onClick={onToggleCollapse} title="Show declaration tree">☰</button>
       </div>
     );
   }
@@ -189,7 +189,7 @@ export default function ModelTree({
       onContextMenu={(e) => { e.preventDefault(); setCtx(null); }}
     >
       <div className="atlas-palette-head">
-        <span className="atlas-palette-title">MODEL</span>
+        <span className="atlas-palette-title">DECLARATION</span>
         <button className="atlas-palette-collapse" onClick={onToggleCollapse} title="Collapse">⟨</button>
       </div>
       {onRenameProject && (

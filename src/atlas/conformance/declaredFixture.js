@@ -87,3 +87,12 @@ export const DECLARED_EDGES = [
   { id: 'e4', source: 'validation-agent', target: 'tool-equivalence-checker' },
   // codegen-agent: no tool edges — it stages output, it does not invoke emitters.
 ];
+
+// Identity of the declaration the run is diffed against. An attestation's first
+// audit question is "conformant against WHAT?" — drift is only evidence if the
+// baseline is pinned. In production this is the registry version + content hash.
+export const DECLARATION_META = {
+  name: 'causeway registry',
+  version: 'v1.0.0',
+  ratifiedAt: '2026-06-11',
+};

@@ -28,7 +28,7 @@ import { loadModel, saveModel, clearModel, saveRecovery, loadRecovery, clearReco
 // shape is visible — they render a "coming soon" placeholder until built.
 const SECTIONS = [
   { id: 'requirements', label: 'Requirements', ready: true },
-  { id: 'model', label: 'Model', ready: true },
+  { id: 'model', label: 'Declaration', ready: true },
   { id: 'monitoring', label: 'Monitoring', ready: true,
     blurb: 'Declared-vs-running conformance: replay a run, catch drift, attest.' },
   { id: 'reverse', label: 'Reverse Eng', ready: false,

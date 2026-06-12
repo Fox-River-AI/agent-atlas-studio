@@ -227,7 +227,7 @@ export function runConformance(nodes, edges, trace) {
 // Roll the conformance result into an attestation summary — the evidence artifact
 // a compliance buyer hands an auditor. Maps violations/passes to the declared
 // compliance regimes so the report speaks the buyer's framework language.
-export function buildAttestation(nodes, edges, trace, result, stampISO) {
+export function buildAttestation(nodes, edges, trace, result, declarationMeta) {
   const orch = nodes.find((n) => n.type === 'orchestrator');
   const regimes = orch?.data?.complianceRegimes || [];
   // Governance findings (compliance concern) = violations + omissions + shadows.
@@ -239,8 +239,9 @@ export function buildAttestation(nodes, edges, trace, result, stampISO) {
     : (sev('critical') > 0 ? 'NON-CONFORMANT (critical drift)' : 'CONFORMANT WITH EXCEPTIONS');
   const nistFns = [...new Set(gov.map((v) => v.nist).filter(Boolean))];
   return {
-    model: orch?.data?.id || 'model',
-    generatedAt: stampISO || null,
+    system: orch?.data?.id || 'system',
+    model: orch?.data?.id || 'system', // back-compat alias
+    declaration: declarationMeta || null,
     runId: trace.runId,
     regimes,
     nistFunctions: nistFns,
