@@ -68,6 +68,56 @@
 .atlas-soon-card { max-width: 32rem; text-align: center; }
 .atlas-soon-card h2 { color: var(--accent); margin: 0 0 0.6rem; }
 .atlas-soon-card p { color: var(--text-muted); line-height: 1.6; }
+
+/* ── Monitoring / conformance demo (DIAG-49) ───────────────────────────── */
+.atlas-mon { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+.atlas-mon-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; padding: 1rem 1.5rem 0.75rem; border-bottom: 1px solid var(--border-soft); }
+.atlas-mon-head h2 { margin: 0; color: var(--accent); font-size: 1.25rem; }
+.atlas-mon-sub { margin: 0.3rem 0 0; color: var(--text-muted); font-size: 0.9rem; max-width: 48rem; line-height: 1.5; }
+.atlas-mon-controls { display: flex; gap: 0.5rem; flex: none; }
+.atlas-mon-controls button { border: 1px solid var(--border); border-radius: 6px; padding: 0.4rem 0.9rem; font-size: 0.88rem; font-weight: 600; cursor: pointer; background: var(--bg-elevated); color: var(--text); }
+.atlas-mon-controls button.primary { background: var(--accent); color: var(--accent-fg); border-color: var(--accent); }
+.atlas-mon-controls button:disabled { opacity: 0.45; cursor: default; }
+.atlas-mon-stats { display: flex; gap: 1.25rem; padding: 0.6rem 1.5rem; font-size: 0.9rem; }
+.atlas-mon-stat { color: var(--text-muted); font-weight: 600; }
+.atlas-mon-stat.ok { color: var(--ok); }
+.atlas-mon-stat.bad { color: var(--bad); }
+.atlas-mon-body { flex: 1; display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; padding: 0 1.5rem 1.5rem; overflow: hidden; }
+.atlas-mon-coltitle { font-size: 0.78rem; letter-spacing: 1px; text-transform: uppercase; color: var(--text-dim); margin-bottom: 0.6rem; }
+.atlas-mon-trace, .atlas-mon-diff { overflow-y: auto; }
+
+/* span timeline */
+.atlas-mon-span { display: flex; align-items: center; gap: 0.6rem; padding: 0.45rem 0.7rem; margin-bottom: 0.35rem; border-radius: 6px; border: 1px solid var(--border-soft); background: var(--bg-elevated); font-size: 0.85rem; transition: opacity 0.2s, border-color 0.2s; }
+.atlas-mon-span.pending { opacity: 0.32; }
+.atlas-mon-span.ran { opacity: 1; }
+.atlas-mon-span.bad { border-color: var(--bad); box-shadow: 0 0 0 1px var(--bad) inset; }
+.atlas-mon-span-kind { font-family: ui-monospace, Menlo, monospace; font-size: 0.72rem; color: var(--text-dim); min-width: 5.5rem; }
+.atlas-mon-span-who { font-weight: 600; color: var(--text); flex: 1; }
+.atlas-mon-span-meta { font-size: 0.72rem; color: var(--text-muted); background: var(--bg); padding: 0.05rem 0.4rem; border-radius: 4px; }
+.atlas-mon-span-flag { color: var(--bad); font-weight: 700; font-size: 0.78rem; }
+
+/* conformance diff */
+.atlas-mon-viol { border-left: 3px solid var(--bad); background: var(--bg-elevated); border-radius: 0 6px 6px 0; padding: 0.55rem 0.8rem; margin-bottom: 0.5rem; }
+.atlas-mon-viol.sev-critical { border-left-color: #ef4444; }
+.atlas-mon-viol.sev-high { border-left-color: #f97316; }
+.atlas-mon-viol.sev-medium { border-left-color: #eab308; }
+.atlas-mon-viol-head { display: flex; align-items: baseline; gap: 0.5rem; margin-bottom: 0.2rem; }
+.atlas-mon-sev { font-size: 0.68rem; font-weight: 800; letter-spacing: 0.5px; color: var(--bad); }
+.atlas-mon-rule { font-weight: 600; color: var(--text); font-size: 0.9rem; }
+.atlas-mon-viol-detail { font-size: 0.84rem; color: var(--text-muted); line-height: 1.45; }
+.atlas-mon-attest-cta { margin-top: 1rem; }
+.atlas-mon-attest-cta button { border: none; border-radius: 6px; padding: 0.55rem 1.1rem; font-weight: 700; cursor: pointer; background: var(--accent); color: var(--accent-fg); font-size: 0.95rem; }
+
+/* attestation modal */
+.atlas-attest { max-width: 40rem; }
+.atlas-attest-verdict { font-size: 1.1rem; font-weight: 800; padding: 0.5rem 0.9rem; border-radius: 6px; margin: 0.4rem 0 0.9rem; text-align: center; }
+.atlas-attest-verdict.bad { background: rgba(239,68,68,0.15); color: #ef4444; }
+.atlas-attest-verdict.warn { background: rgba(234,179,8,0.15); color: #eab308; }
+.atlas-attest-verdict.ok { background: rgba(34,197,94,0.15); color: var(--ok); }
+.atlas-attest-table { width: 100%; border-collapse: collapse; margin-bottom: 0.8rem; }
+.atlas-attest-table td { padding: 0.35rem 0.5rem; border-bottom: 1px solid var(--border-soft); font-size: 0.88rem; vertical-align: top; }
+.atlas-attest-table td:first-child { color: var(--text-muted); width: 11rem; }
+.atlas-attest-note { font-size: 0.85rem; color: var(--text-muted); line-height: 1.5; }
 .atlas-actions button {
   background: var(--bg-elevated);
   color: var(--text);

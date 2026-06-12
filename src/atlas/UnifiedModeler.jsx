@@ -7,6 +7,7 @@ import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react'
 import JSZip from 'jszip';
 import UnifiedGraph from './UnifiedGraph';
 import PropertiesPanel from './PropertiesPanel';
+import MonitoringView from './MonitoringView';
 import ModelTree from './ModelTree';
 import RequirementsView from './RequirementsView';
 import { SettingsModal, AboutModal } from './Modals';
@@ -28,8 +29,8 @@ import { loadModel, saveModel, clearModel, saveRecovery, loadRecovery, clearReco
 const SECTIONS = [
   { id: 'requirements', label: 'Requirements', ready: true },
   { id: 'model', label: 'Model', ready: true },
-  { id: 'monitoring', label: 'Monitoring', ready: false,
-    blurb: 'Live dashboards from the telemetry each agent manifest declares.' },
+  { id: 'monitoring', label: 'Monitoring', ready: true,
+    blurb: 'Declared-vs-running conformance: replay a run, catch drift, attest.' },
   { id: 'reverse', label: 'Reverse Eng', ready: false,
     blurb: 'Recover the running system’s agent/tool/system graph from OTel traces and diff it against the declared model.' },
   { id: 'compare', label: 'Compare', ready: false,
@@ -997,6 +998,8 @@ export default function UnifiedModeler() {
           onReview={reviewRequirements}
           endpointConfigured={!!endpointUrl}
         />
+       ) : section === 'monitoring' ? (
+        <MonitoringView />
        ) : section !== 'model' ? (
         (() => {
           const s = SECTIONS.find((x) => x.id === section);
