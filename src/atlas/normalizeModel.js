@@ -132,6 +132,15 @@ export function normalizeGeneratedModel(raw) {
   const seenEdge = new Set();
   for (const e of rawEdges) {
     if (!e || !objects[e.source] || !objects[e.target]) { problems.push('Dropped an edge with a missing endpoint.'); continue; }
+    // CONTRADICTION GUARD: an agent must not be ALLOWED (an edge) a tool it also
+    // PROHIBITS. The prohibition is the stronger, intentional negative declaration,
+    // so it wins — drop the allow-edge. (e.g. codegen-agent declared "prohibited:
+    // emitters" because it only stages, but the generator also edged it to them.)
+    const src = objects[e.source];
+    if (src?.kind === 'agent' && (src.data?.prohibitedTools || []).includes(e.target)) {
+      problems.push(`“${e.source}” was both allowed and prohibited from “${e.target}” — kept the prohibition, dropped the allow-edge.`);
+      continue;
+    }
     const eid = e.id || `e-${e.source}-${e.target}`;
     if (seenEdge.has(eid)) continue;
     seenEdge.add(eid);
