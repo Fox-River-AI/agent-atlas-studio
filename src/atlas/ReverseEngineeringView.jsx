@@ -40,15 +40,18 @@ export default function ReverseEngineeringView({ endpointUrl, onReviewText, onAd
   const [reviewBusy, setReviewBusy] = useState(false);
   const [review, setReview] = useState(null);
 
-  // Scan target: a named repo preset, or a custom host path.
-  const [presets, setPresets] = useState([]);
-  const [target, setTarget] = useState(''); // preset id
-  const [customPath, setCustomPath] = useState('');
+  // The operator DECLARES which codebases comprise this system — the tool doesn't
+  // pre-know them. A repo is { label, path, preset? }. Presets are convenience
+  // shortcuts ("this deployment's known repos"), not the only way in.
+  const [repos, setRepos] = useState([]);        // the set to scan
+  const [presets, setPresets] = useState([]);    // optional shortcuts from the backend
+  const [pathInput, setPathInput] = useState(''); // free-text path being typed
 
   const base = (suffix) => (endpointUrl ? endpointUrl.replace(/generate-model\/?$/, suffix) : '');
   const scanUrl = base('scan-codebase');
 
-  // Discover the on-host repo presets so the operator picks a target, not a path.
+  // Pull any known-repo shortcuts the backend offers (optional — the operator can
+  // always just type paths). These are convenience, not the source of truth.
   useEffect(() => {
     if (!endpointUrl) return;
     let cancelled = false;
@@ -57,34 +60,43 @@ export default function ReverseEngineeringView({ endpointUrl, onReviewText, onAd
         const res = await fetch(base('scan-presets'));
         if (!res.ok) return;
         const j = await res.json();
-        if (!cancelled) {
-          setPresets(j.presets || []);
-          const firstAvail = (j.presets || []).find((p) => p.available);
-          if (firstAvail) setTarget(firstAvail.id);
-        }
-      } catch { /* presets are optional; custom path still works */ }
+        if (!cancelled) setPresets(j.presets || []);
+      } catch { /* shortcuts are optional */ }
     })();
     return () => { cancelled = true; };
   }, [endpointUrl]);
 
-  const scan = async () => {
+  const addRepo = (repo) => {
+    setRepos((rs) => rs.some((r) => (r.preset && r.preset === repo.preset) || r.path === repo.path) ? rs : [...rs, repo]);
+  };
+  const removeRepo = (i) => setRepos((rs) => rs.filter((_, j) => j !== i));
+  const addTypedPath = () => {
+    const p = pathInput.trim();
+    if (!p) return;
+    addRepo({ label: p.replace(/\/+$/, '').split('/').pop() || p, path: p });
+    setPathInput('');
+  };
+
+  // Scan every repo in the set into ONE recovered estate (accumulate + dedupe).
+  const scanAll = async () => {
     if (!endpointUrl) { setErr('No scan endpoint configured. Set the model endpoint in Settings.'); return; }
-    const body = customPath.trim() ? { root: customPath.trim() } : (target ? { preset: target } : {});
-    const repoLabel = customPath.trim() || target || 'backend';
-    setErr(null); setReview(null); setBusy(true);
+    if (!repos.length) { setErr('Add at least one codebase to scan.'); return; }
+    setErr(null); setReview(null); setResult(null); setBusy(true);
+    let acc = null;
     try {
-      const res = await fetch(scanUrl, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
-      if (!res.ok) throw new Error(`Scan endpoint returned ${res.status} ${res.statusText}.`);
-      const json = await res.json();
-      const { model } = normalizeGeneratedModel(json.declaration || {});
-      // Noesis is ONE system across repos — ACCUMULATE into the recovered estate
-      // rather than replace. Dedupe by id (the same datastore/tool/agent touched by
-      // two repos is ONE object); tag each object with the repo it came from; keep a
-      // single orchestrator (the union's control plane) and re-parent. Re-scanning
-      // the same repo refreshes its objects.
-      setResult((prev) => mergeScan(prev, model, repoLabel, json.notes || []));
+      for (const repo of repos) {
+        const body = repo.preset ? { preset: repo.preset } : { root: repo.path };
+        const res = await fetch(scanUrl, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
+        if (!res.ok) { throw new Error(`Scan of "${repo.label}" returned ${res.status} ${res.statusText}.`); }
+        const json = await res.json();
+        const { model } = normalizeGeneratedModel(json.declaration || {});
+        // Dedupe by id (same datastore/agent across repos = one object), tag source,
+        // single union orchestrator. Re-scanning refreshes.
+        acc = mergeScan(acc, model, repo.label, json.notes || []);
+      }
+      setResult(acc);
     } catch (e) {
-      setErr(`Could not reach the scan endpoint (${scanUrl}). Check the backend is running and CORS-open. [${e?.message || e}]`);
+      setErr(`${e?.message || e} (backend reachable + CORS-open? path correct on the host?)`);
     } finally { setBusy(false); }
   };
 
@@ -198,26 +210,40 @@ export default function ReverseEngineeringView({ endpointUrl, onReviewText, onAd
             gaps are the work.</em>
           </p>
         </div>
-        <div className="atlas-re-target">
-          <label>Codebase
-            <select value={target} onChange={(e) => { setTarget(e.target.value); setCustomPath(''); }} disabled={!!customPath.trim()}>
-              {presets.length === 0 && <option value="">— default (running backend) —</option>}
-              {presets.map((p) => (
-                <option key={p.id} value={p.id} disabled={!p.available}>
-                  {p.id}{p.available ? '' : ' (not on host)'} — {p.path}
-                </option>
-              ))}
-            </select>
-          </label>
-          <input className="atlas-re-custompath" value={customPath} onChange={(e) => setCustomPath(e.target.value)}
-            placeholder="…or a custom host path" title="Absolute path on the backend host; overrides the preset" />
-          <button className="primary" onClick={scan} disabled={busy || !endpointUrl}>
-            {busy ? 'Scanning…' : (result ? '+ Add repo' : '⟲ Scan')}
-          </button>
-        </div>
+        <button className="primary" onClick={scanAll} disabled={busy || !endpointUrl || !repos.length}>
+          {busy ? 'Scanning…' : `⟲ Scan ${repos.length || ''} codebase${repos.length === 1 ? '' : 's'}`}
+        </button>
       </div>
 
       {!endpointUrl && <div className="atlas-re-hint">Set the model endpoint in Settings — the scan URL is derived from it.</div>}
+
+      {/* The operator declares which codebases make up this system. */}
+      <div className="atlas-re-repos">
+        <div className="atlas-re-coltitle">Codebases that make up this system</div>
+        {repos.length === 0 && <p className="atlas-re-reposhint">Add the repositories that comprise the system you’re assessing — then scan them as one. The tool doesn’t assume what they are; you tell it.</p>}
+        {repos.length > 0 && (
+          <ul className="atlas-re-repolist">
+            {repos.map((r, i) => (
+              <li key={i}>
+                <span className="atlas-re-replabel">{r.label}</span>
+                <code className="atlas-re-reppath">{r.preset ? `(preset) ${r.path}` : r.path}</code>
+                <button className="atlas-re-repx" onClick={() => removeRepo(i)} title="Remove">×</button>
+              </li>
+            ))}
+          </ul>
+        )}
+        <div className="atlas-re-repoadd">
+          <input value={pathInput} onChange={(e) => setPathInput(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter') addTypedPath(); }}
+            placeholder="Add a codebase path on the backend host (e.g. /home/exx/myCode/noesis-gateway)" />
+          <button onClick={addTypedPath} disabled={!pathInput.trim()}>+ Add path</button>
+          {presets.filter((p) => p.available && !repos.some((r) => r.preset === p.id)).map((p) => (
+            <button key={p.id} className="atlas-re-presetbtn" onClick={() => addRepo({ label: p.id, path: p.path, preset: p.id })}
+              title={p.path}>+ {p.id}</button>
+          ))}
+        </div>
+      </div>
+
       {err && <div className="atlas-re-msg err">{err}</div>}
 
       {result && (
@@ -321,10 +347,10 @@ export default function ReverseEngineeringView({ endpointUrl, onReviewText, onAd
         </div>
       )}
 
-      {!result && !busy && !err && (
+      {!result && !busy && !err && repos.length > 0 && (
         <div className="atlas-re-empty">
-          <p>Click <strong>Scan codebase</strong> to recover the declaration from the running backend.
-          The scan reads structure only and never emits credentials — system connections are recorded as hints.</p>
+          <p>Click <strong>Scan {repos.length} codebase{repos.length === 1 ? '' : 's'}</strong> to recover one declaration across the set.
+          The scan reads structure only and never emits credentials — system connections are recorded as hints, and shared datastores merge into one.</p>
         </div>
       )}
     </div>

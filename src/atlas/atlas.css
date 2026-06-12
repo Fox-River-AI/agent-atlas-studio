@@ -76,10 +76,20 @@
 .atlas-re-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; padding: 1rem 1.5rem 0.75rem; border-bottom: 1px solid var(--border-soft); }
 .atlas-re-head h2 { margin: 0; color: var(--accent); font-size: 1.25rem; }
 .atlas-re-sub { margin: 0.3rem 0 0; color: var(--text-muted); font-size: 0.9rem; max-width: 50rem; line-height: 1.5; }
-.atlas-re-target { display: flex; align-items: flex-end; gap: 0.5rem; flex: none; }
-.atlas-re-target label { display: flex; flex-direction: column; gap: 0.2rem; font-size: 0.74rem; color: var(--text-muted); }
-.atlas-re-target select { background: var(--bg-elevated); color: var(--text); border: 1px solid var(--border-soft); border-radius: 5px; padding: 0.35rem 0.5rem; font-size: 0.85rem; max-width: 22rem; }
-.atlas-re-custompath { background: var(--bg-elevated); color: var(--text); border: 1px solid var(--border-soft); border-radius: 5px; padding: 0.35rem 0.5rem; font-size: 0.85rem; width: 12rem; }
+/* operator-declared codebase list */
+.atlas-re-repos { padding: 0.8rem 1.5rem; border-bottom: 1px solid var(--border-soft); }
+.atlas-re-reposhint { font-size: 0.86rem; color: var(--text-muted); line-height: 1.5; margin: 0.2rem 0 0.6rem; max-width: 46rem; }
+.atlas-re-repolist { list-style: none; margin: 0 0 0.6rem; padding: 0; display: flex; flex-direction: column; gap: 0.3rem; }
+.atlas-re-repolist li { display: flex; align-items: center; gap: 0.6rem; background: var(--bg-elevated); border-radius: 5px; padding: 0.3rem 0.6rem; }
+.atlas-re-replabel { font-weight: 600; color: var(--text); font-size: 0.88rem; }
+.atlas-re-reppath { font-size: 0.74rem; color: var(--text-muted); flex: 1; }
+.atlas-re-repx { background: none; border: none; color: var(--text-dim); font-size: 1.1rem; cursor: pointer; line-height: 1; }
+.atlas-re-repx:hover { color: var(--bad); }
+.atlas-re-repoadd { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
+.atlas-re-repoadd input { flex: 1; min-width: 16rem; background: var(--bg-elevated); color: var(--text); border: 1px solid var(--border-soft); border-radius: 5px; padding: 0.4rem 0.6rem; font-size: 0.85rem; }
+.atlas-re-repoadd button { border: 1px solid var(--border-soft); background: var(--bg-elevated); color: var(--text); border-radius: 5px; padding: 0.35rem 0.7rem; font-size: 0.82rem; font-weight: 600; cursor: pointer; }
+.atlas-re-repoadd button:disabled { opacity: 0.45; cursor: default; }
+.atlas-re-presetbtn { color: var(--accent) !important; border-color: var(--accent) !important; }
 .atlas-re-head button.primary { flex: none; border: none; border-radius: 6px; padding: 0.45rem 1rem; font-weight: 700; cursor: pointer; background: var(--accent); color: var(--accent-fg); font-size: 0.9rem; }
 .atlas-re-head button:disabled { opacity: 0.45; cursor: default; }
 .atlas-re-hint, .atlas-re-msg { padding: 0.5rem 1.5rem; font-size: 0.88rem; }
