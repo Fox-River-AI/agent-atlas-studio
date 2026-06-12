@@ -293,10 +293,12 @@ export function buildBundle(nodes, edges) {
 }
 
 // ── Governance data dictionary (Step 4) ─────────────────────────────────────
-// Render the model AS a human-readable governance document — the "conformance
+// Render the DECLARATION as a human-readable governance document — the "conformance
 // artifact that leaves the building" (an auditor / compliance officer / risk
-// committee reads this, not YAML). It is generated FROM the model (model → doc),
-// so it can't drift from the registry. Surfaces, per object: owner, data
+// committee reads this, not YAML). Generated FROM the declaration (declaration →
+// doc), so it can't drift from the registry. Vocabulary: "declaration" = the
+// design-time artifact; "system" = the running thing it governs; "LLM" = the agent's
+// language model. Surfaces, per object: owner, data
 // classification + tags, residency/retention/redaction, refusal/grounding/
 // escalation, prohibited tools, telemetry — the NIST Map+Govern declaration.
 function gov(d) { return (d && d.governance) || {}; }
@@ -310,11 +312,13 @@ export function buildDataDictionary(nodes, edges, projectName) {
   const lines = [];
   const P = (s) => lines.push(s);
 
-  P(`# ${projectName || 'Untitled model'} — Governance Data Dictionary`);
+  const systemId = od.id || projectName || 'system';
+  P(`# ${projectName || 'Untitled declaration'} — Governance Data Dictionary`);
   P('');
-  P('_Generated from the Agent Atlas model. This is a derived artifact — the model is the source of truth; regenerate this rather than hand-editing._');
+  P('_Generated from the Agent Atlas declaration (the design-time artifact). This is a derived document — the declaration is the source of truth; regenerate this rather than hand-editing._');
   P('');
-  P(`**Compliance regimes (model-level):** ${regimes}`);
+  P(`**System:** \`${systemId}\` (the orchestrated agentic system this declaration governs)`);
+  P(`**Compliance regimes (system-level):** ${regimes}`);
   P(`**Control plane:** ${od.controlFlow || '—'}${od.stateStore ? ` · state store: \`${od.stateStore}\`` : ''}`);
   P(`**Objects:** ${nodes.length}`);
   P('');
@@ -342,7 +346,7 @@ export function buildDataDictionary(nodes, edges, projectName) {
       const tools = toolsForAgent(a.id, nodes, edges);
       P(`### \`${d.id}\``);
       P(`- **Responsibility:** ${d.responsibility || '—'}`);
-      P(`- **Model:** ${routerForAgent(a.id, nodes, edges) ? `router \`${routerForAgent(a.id, nodes, edges)}\`` : (d.model?.pinned || d.model?.name || '—')}`);
+      P(`- **LLM:** ${routerForAgent(a.id, nodes, edges) ? `router \`${routerForAgent(a.id, nodes, edges)}\`` : (d.model?.pinned || d.model?.name || '—')}`);
       P(`- **Allowed tools:** ${fmtList(tools)}`);
       P(`- **Prohibited tools:** ${fmtList(d.prohibitedTools)}`);
       P(`- **Grounding threshold:** ${d.groundingThreshold != null && d.groundingThreshold !== '' ? d.groundingThreshold : '—'}`);
