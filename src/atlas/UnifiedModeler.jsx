@@ -1009,6 +1009,7 @@ export default function UnifiedModeler() {
        ) : section === 'reverse' ? (
         <ReverseEngineeringView
           endpointUrl={endpointUrl}
+          onReviewText={(text) => httpEndpointProvider(endpointUrl).reviewRequirements(text)}
           onAdopt={(model) => {
             // Load the recovered declaration into the Declaration tab to ratify +
             // govern it. Reuses the same apply+undo path as a generated declaration.
