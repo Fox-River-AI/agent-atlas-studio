@@ -85,6 +85,8 @@
 .atlas-mon-stat.ok { color: var(--ok); }
 .atlas-mon-stat.bad { color: var(--bad); }
 .atlas-mon-stat.warn { color: #eab308; }
+.atlas-mon-stat.omit { color: #a855f7; }
+.atlas-mon-stat.shadow { color: #ec4899; }
 
 /* filters bar */
 .atlas-mon-filters { display: flex; align-items: center; gap: 1.25rem; padding: 0.5rem 1.5rem; border-top: 1px solid var(--border-soft); border-bottom: 1px solid var(--border-soft); }
@@ -102,10 +104,14 @@
 .atlas-mon-viol.sev-high { border-left-color: #f97316; }
 .atlas-mon-viol.sev-medium { border-left-color: #eab308; }
 .atlas-mon-viol.error { border-left-color: #38bdf8; }
+.atlas-mon-viol.omission { border-left-color: #a855f7; }
+.atlas-mon-viol.shadow { border-left-color: #ec4899; }
 .atlas-mon-viol-head { display: flex; align-items: center; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.2rem; }
 .atlas-mon-tag { font-size: 0.62rem; font-weight: 800; letter-spacing: 0.5px; padding: 0.1rem 0.4rem; border-radius: 4px; }
 .atlas-mon-tag.violation { background: rgba(239,68,68,0.18); color: #ef4444; }
 .atlas-mon-tag.error { background: rgba(56,189,248,0.18); color: #38bdf8; }
+.atlas-mon-tag.omission { background: rgba(168,85,247,0.18); color: #a855f7; }
+.atlas-mon-tag.shadow { background: rgba(236,72,153,0.18); color: #ec4899; }
 .atlas-mon-sev { font-size: 0.68rem; font-weight: 800; letter-spacing: 0.5px; color: var(--text-muted); }
 .atlas-mon-nist { font-size: 0.66rem; font-weight: 700; color: var(--accent); border: 1px solid var(--accent); border-radius: 4px; padding: 0.05rem 0.35rem; }
 .atlas-mon-rule { font-weight: 600; color: var(--text); font-size: 0.9rem; }

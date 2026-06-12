@@ -16,6 +16,7 @@ import { runConformance, buildAttestation } from './conformance/conformanceEngin
 
 const SEV_RANK = { critical: 0, high: 1, medium: 2, info: 3 };
 const AGENTS = ['discovery-agent', 'parsing-agent', 'mapping-agent', 'codegen-agent', 'validation-agent', 'review-router-agent'];
+const TAG_LABEL = { violation: 'VIOLATION', omission: 'OMISSION', shadow: 'SHADOW AGENT', error: 'ERROR' };
 
 export default function MonitoringView() {
   const trace = CAUSEWAY_TRACE;
@@ -32,7 +33,7 @@ export default function MonitoringView() {
 
   // Filters (operational console): scope by agent, and by finding type.
   const [agentFilter, setAgentFilter] = useState('all');
-  const [typeFilter, setTypeFilter] = useState('findings'); // findings | violations | errors | all
+  const [typeFilter, setTypeFilter] = useState('findings'); // findings | violations | omissions | shadows | errors
 
   useEffect(() => {
     if (!playing) { if (timer.current) clearInterval(timer.current); return; }
@@ -48,19 +49,26 @@ export default function MonitoringView() {
   // Findings revealed so far: a finding shows once its evidence span has run
   // (span-less findings reveal at the end). Then apply the filters.
   const runSpanIds = new Set(spans.slice(0, cursor).map((s) => s.spanId));
-  const allFindings = [...result.violations, ...result.errors];
+  const allFindings = [...result.violations, ...result.omissions, ...result.shadows, ...result.errors];
+  // span-anchored findings reveal as their span runs; span-less ones (omissions)
+  // reveal at the end (you can only conclude "it never ran" once the run is done).
   const revealed = allFindings.filter((f) => (f.spanId ? runSpanIds.has(f.spanId) : finished));
   const filtered = revealed
     .filter((f) => agentFilter === 'all' || f.agentId === agentFilter)
-    .filter((f) => typeFilter === 'all' || typeFilter === 'findings'
+    .filter((f) => typeFilter === 'findings'
       || (typeFilter === 'violations' && f.status === 'violation')
+      || (typeFilter === 'omissions' && f.status === 'omission')
+      || (typeFilter === 'shadows' && f.status === 'shadow')
       || (typeFilter === 'errors' && f.status === 'error'))
     .sort((a, b) => SEV_RANK[a.severity] - SEV_RANK[b.severity]);
 
   // Counters reflect what's revealed (and respect the agent filter for honesty).
   const inScope = (f) => agentFilter === 'all' || f.agentId === agentFilter;
-  const vShown = revealed.filter((f) => f.status === 'violation' && inScope(f)).length;
-  const eShown = revealed.filter((f) => f.status === 'error' && inScope(f)).length;
+  const countShown = (st) => revealed.filter((f) => f.status === st && inScope(f)).length;
+  const vShown = countShown('violation');
+  const oShown = countShown('omission');
+  const shShown = countShown('shadow');
+  const eShown = countShown('error');
   const objectsSeen = Math.min(trace.objectCount, Math.ceil((cursor / spans.length) * trace.objectCount));
 
   const attestation = useMemo(() => buildAttestation(DECLARED_NODES, DECLARED_EDGES, trace, result), [result, trace]);
@@ -117,6 +125,8 @@ export default function MonitoringView() {
         <span className="atlas-mon-stat">{objectsSeen}/{trace.objectCount} objects</span>
         <span className="atlas-mon-stat ok">{result.passCount.toLocaleString()} gates checked</span>
         <span className="atlas-mon-stat bad">{vShown} violation{vShown === 1 ? '' : 's'}</span>
+        <span className="atlas-mon-stat omit">{oShown} omission{oShown === 1 ? '' : 's'}</span>
+        <span className="atlas-mon-stat shadow">{shShown} shadow</span>
         <span className="atlas-mon-stat warn">{eShown} error{eShown === 1 ? '' : 's'}</span>
       </div>
 
@@ -129,7 +139,7 @@ export default function MonitoringView() {
           </select>
         </label>
         <div className="atlas-mon-typetabs">
-          {[['findings', 'All findings'], ['violations', 'Violations'], ['errors', 'Errors']].map(([k, label]) => (
+          {[['findings', 'All'], ['violations', 'Violations'], ['omissions', 'Omissions'], ['shadows', 'Shadow agents'], ['errors', 'Errors']].map(([k, label]) => (
             <button key={k} className={typeFilter === k ? 'active' : ''} onClick={() => setTypeFilter(k)}>{label}</button>
           ))}
         </div>
@@ -145,13 +155,13 @@ export default function MonitoringView() {
         ) : filtered.map((f) => (
           <div key={f.id} className={`atlas-mon-viol sev-${f.severity} ${f.status}`}>
             <div className="atlas-mon-viol-head">
-              <span className={`atlas-mon-tag ${f.status}`}>{f.status === 'error' ? 'ERROR' : 'VIOLATION'}</span>
+              <span className={`atlas-mon-tag ${f.status}`}>{TAG_LABEL[f.status] || 'FINDING'}</span>
               <span className="atlas-mon-sev">{f.severity.toUpperCase()}</span>
               {f.nist && <span className="atlas-mon-nist">NIST {f.nist}</span>}
               <span className="atlas-mon-rule">{f.rule}</span>
             </div>
             <div className="atlas-mon-viol-detail">{f.detail}</div>
-            {f.status === 'violation' && (
+            {f.regime && f.status !== 'error' && (
               <div className="atlas-mon-regime">Regime control mapping: <em>{f.regime}</em></div>
             )}
           </div>
@@ -181,8 +191,11 @@ export default function MonitoringView() {
                 <tr><td>Run</td><td><code>{attestation.runId}</code></td></tr>
                 <tr><td>Compliance regimes</td><td>{attestation.regimes.join(' · ')}</td></tr>
                 <tr><td>NIST AI RMF functions</td><td>{attestation.nistFunctions.join(' · ') || '—'}</td></tr>
-                <tr><td>Gates checked</td><td>{attestation.counts.passed.toLocaleString()} passed / {attestation.counts.violations} violation(s)
-                  ({attestation.counts.critical} critical, {attestation.counts.high} high, {attestation.counts.medium} medium) · {attestation.counts.errors} operational error(s)</td></tr>
+                <tr><td>Gates checked</td><td>{attestation.counts.passed.toLocaleString()} passed</td></tr>
+                <tr><td>Governance findings</td><td>
+                  {attestation.counts.violations} violation(s), {attestation.counts.omissions} omission(s) (skipped declared step), {attestation.counts.shadows} shadow agent(s)
+                  — {attestation.counts.critical} critical, {attestation.counts.high} high, {attestation.counts.medium} medium</td></tr>
+                <tr><td>Operational errors</td><td>{attestation.counts.errors}</td></tr>
               </tbody>
             </table>
             <p className="atlas-attest-note">
@@ -211,28 +224,31 @@ function attestationMarkdown(a) {
   lines.push(`**Run:** ${a.runId}`);
   lines.push(`**Compliance regimes (declared):** ${a.regimes.join(', ')}`);
   lines.push(`**NIST AI RMF functions implicated:** ${a.nistFunctions.join(', ') || '—'}`);
-  lines.push(`**Result:** ${a.counts.passed.toLocaleString()} gates passed, ${a.counts.violations} violation(s) — ${a.counts.critical} critical, ${a.counts.high} high, ${a.counts.medium} medium; ${a.counts.errors} operational error(s).`);
+  lines.push(`**Result:** ${a.counts.passed.toLocaleString()} gates passed; ${a.counts.violations} violation(s), ${a.counts.omissions} omission(s), ${a.counts.shadows} shadow agent(s) — ${a.counts.critical} critical, ${a.counts.high} high, ${a.counts.medium} medium; ${a.counts.errors} operational error(s).`);
   lines.push('');
-  lines.push('_Declared-vs-running conformance: each finding ties an observed runtime span to the registry rule it breached and the NIST AI RMF function it implicates. Specific regime control mappings (HIPAA / GDPR / EU AI Act / SOC 2) are produced as part of a governance assessment — this report states the structural function, not a legal conclusion._');
+  lines.push('_Declared-vs-running conformance: each finding ties an observed runtime span (or a declared step that produced none) to the registry rule it breached and the NIST AI RMF function it implicates. Specific regime control mappings (HIPAA / GDPR / EU AI Act / SOC 2) are produced as part of a governance assessment — this report states the structural function, not a legal conclusion._');
   lines.push('');
-  if (a.violations.length) {
-    lines.push('## Violations (declared-rule drift)');
-    lines.push('');
-    for (const v of a.violations) {
-      lines.push(`### [${v.severity.toUpperCase()} · NIST ${v.nist || '—'}] ${v.rule}`);
-      lines.push(v.detail);
-      lines.push(`Regime control mapping: ${v.regime}`);
+  const section = (title, items) => {
+    if (!items.length) return;
+    lines.push(`## ${title}`); lines.push('');
+    for (const f of items) {
+      lines.push(`### [${f.severity.toUpperCase()} · NIST ${f.nist || '—'}] ${f.rule}`);
+      lines.push(f.detail);
+      if (f.regime) lines.push(`Regime control mapping: ${f.regime}`);
       lines.push('');
     }
-  }
+  };
+  section('Violations (declared-rule drift)', a.violations);
+  section('Omissions (declared step that did not run — closed-world)', a.omissions);
+  section('Shadow agents (ran but undeclared)', a.shadows);
   if (a.errors.length) {
     lines.push('## Operational errors (runtime failures, independent of rules)');
     lines.push('');
     for (const e of a.errors) { lines.push(`### [${e.severity.toUpperCase()}] ${e.rule}`); lines.push(e.detail); lines.push(''); }
   }
-  if (!a.violations.length && !a.errors.length) {
+  if (!a.governanceFindings.length && !a.errors.length) {
     lines.push('## Findings');
-    lines.push('No drift or errors — runtime conformed to the declared registry.');
+    lines.push('No drift, omissions, shadow agents, or errors — runtime conformed to the declared registry.');
     lines.push('');
   }
   lines.push('---');

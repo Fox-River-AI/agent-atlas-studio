@@ -16,6 +16,11 @@
 //   ERRORS (broke operationally, no rule needed):
 //     • tool-oracle-extractor timeout (object 12)
 //     • codegen-agent crash / malformed output (object 77)
+//   OMISSION (declared agent that DIDN'T run — the negation case, Q3):
+//     • object 34 completes with NO validation-agent span — the safety gate was
+//       silently skipped; the run "succeeded" anyway.
+//   SHADOW agent (ran but undeclared, Q4):
+//     • object 89 has a span from "rogue-export-agent", which is not in the registry.
 
 const AGENTS = [
   { id: 'discovery-agent', stage: 'discover', tool: 'tool-oracle-extractor', conf: 0.96 },
@@ -35,6 +40,9 @@ function buildSpans() {
   for (let obj = 1; obj <= N_OBJECTS; obj++) {
     const objId = `obj-${String(obj).padStart(4, '0')}`;
     for (const a of AGENTS) {
+      // OMISSION (Q3): object 34 silently SKIPS validation-agent entirely — no
+      // spans of any kind for that stage. The run completes without its safety gate.
+      if (obj === 34 && a.id === 'validation-agent') continue;
       // model-route happens for the reasoning agents
       if (a.id === 'mapping-agent' || a.id === 'codegen-agent') {
         // V3: object 41 routes REGULATED data to a cloud model on codegen
@@ -84,6 +92,13 @@ function buildSpans() {
       if (!omitTelemetry) {
         spans.push({ spanId: next(), kind: 'telemetry', objId, agentId: a.id, name: `${a.id}-span` });
       }
+    }
+
+    // SHADOW (Q4): object 89 has spans from an agent that is NOT in the registry —
+    // an undeclared participant that ran. Only a declaration layer can flag this.
+    if (obj === 89) {
+      spans.push({ spanId: next(), kind: 'agent-step', objId, agentId: 'rogue-export-agent', stage: 'export', confidence: 0.9, refused: false });
+      spans.push({ spanId: next(), kind: 'tool-call', objId, agentId: 'rogue-export-agent', target: 'tool-external-ftp' });
     }
   }
   return spans;

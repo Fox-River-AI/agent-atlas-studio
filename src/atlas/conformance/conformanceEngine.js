@@ -170,11 +170,58 @@ export function runConformance(nodes, edges, trace) {
     }
   }
 
+  // ── 5. OMISSION — a declared required agent that DIDN'T run (Q3) ───────
+  // The negation case. Detecting "X should have run and didn't" needs a
+  // CLOSED-WORLD assumption — and the registry is what licenses it: the declared
+  // agent set is the closed world, so silence becomes meaningful. (A pure
+  // observability tool is open-world and structurally cannot make this finding.)
+  // Per object that entered the pipeline, every declared agent should have an
+  // agent-step span; any that didn't = an omission (worse than a violation — the
+  // run "succeeded" while skipping the step).
+  const requiredAgents = nodes.filter((nd) => nd.type === 'agent').map((nd) => nd.id);
+  const objectsSeen = [...new Set(spans.filter((s) => s.objId).map((s) => s.objId))];
+  const ranByObject = {}; // objId -> Set(agentId that produced an agent-step)
+  for (const s of spans) {
+    if (s.kind === 'agent-step') (ranByObject[s.objId] ||= new Set()).add(s.agentId);
+  }
+  for (const objId of objectsSeen) {
+    const ran = ranByObject[objId] || new Set();
+    for (const agentId of requiredAgents) {
+      if (ran.has(agentId)) { pass(); }
+      else {
+        add({
+          rule: `${agentId} is a declared required participant — it must run for every object (closed-world: registry declares the pipeline)`,
+          severity: 'critical', status: 'omission', nist: 'GOVERN',
+          agentId,
+          detail: `Object ${objId} completed with NO ${agentId} span — a declared stage was silently skipped. The run did not fail; the gate just never ran. Only the registry's closed-world declaration makes this absence detectable.`,
+        });
+      }
+    }
+  }
+
+  // ── 6. SHADOW AGENT — a span from an agent NOT in the registry (Q4) ───
+  // "What's running that nobody declared?" Any span whose agentId fails registry
+  // lookup is an undeclared participant. Trivially detectable WITH a declaration;
+  // impossible without one. (The AI-SPM headline fear.)
+  const declaredIds = new Set(nodes.map((nd) => nd.id));
+  const flaggedShadow = new Set();
+  for (const s of spans) {
+    if (!s.agentId || declaredIds.has(s.agentId) || flaggedShadow.has(s.agentId)) continue;
+    flaggedShadow.add(s.agentId);
+    add({
+      rule: `${s.agentId} is a SHADOW agent — it ran but is not declared in the registry`,
+      severity: 'critical', status: 'shadow', nist: 'GOVERN', agentId: s.agentId, spanId: s.spanId,
+      detail: `Observed spans from "${s.agentId}", which has no manifest in the registry. An undeclared participant touched the run — invisible to design-time governance until now.`,
+    });
+  }
+
   const violations = checks.filter((c) => c.status === 'violation');
   const errors = checks.filter((c) => c.status === 'error');
-  // checks now holds only findings (violations + errors); passes are counted.
-  const totalChecks = passCount + violations.length + errors.length;
-  return { checks, violations, errors, passCount, totalChecks };
+  const omissions = checks.filter((c) => c.status === 'omission');
+  const shadows = checks.filter((c) => c.status === 'shadow');
+  // checks holds only findings; passes are counted.
+  const totalChecks = passCount + violations.length + errors.length + omissions.length + shadows.length;
+  return { checks, violations, errors, omissions, shadows, passCount, totalChecks };
 }
 
 // Roll the conformance result into an attestation summary — the evidence artifact
@@ -183,12 +230,14 @@ export function runConformance(nodes, edges, trace) {
 export function buildAttestation(nodes, edges, trace, result, stampISO) {
   const orch = nodes.find((n) => n.type === 'orchestrator');
   const regimes = orch?.data?.complianceRegimes || [];
-  const sev = (s) => result.violations.filter((v) => v.severity === s).length;
-  const verdict = result.violations.length === 0
+  // Governance findings (compliance concern) = violations + omissions + shadows.
+  // Errors are operational, reported separately and don't drive the verdict.
+  const gov = [...result.violations, ...(result.omissions || []), ...(result.shadows || [])];
+  const sev = (s) => gov.filter((v) => v.severity === s).length;
+  const verdict = gov.length === 0
     ? 'CONFORMANT'
     : (sev('critical') > 0 ? 'NON-CONFORMANT (critical drift)' : 'CONFORMANT WITH EXCEPTIONS');
-  // NIST AI RMF functions implicated by the violations (deduped).
-  const nistFns = [...new Set(result.violations.map((v) => v.nist).filter(Boolean))];
+  const nistFns = [...new Set(gov.map((v) => v.nist).filter(Boolean))];
   return {
     model: orch?.data?.id || 'model',
     generatedAt: stampISO || null,
@@ -200,10 +249,15 @@ export function buildAttestation(nodes, edges, trace, result, stampISO) {
       checks: result.totalChecks,
       passed: result.passCount,
       violations: result.violations.length,
+      omissions: (result.omissions || []).length,
+      shadows: (result.shadows || []).length,
       errors: (result.errors || []).length,
       critical: sev('critical'), high: sev('high'), medium: sev('medium'),
     },
+    governanceFindings: gov,
     violations: result.violations,
+    omissions: result.omissions || [],
+    shadows: result.shadows || [],
     errors: result.errors || [],
   };
 }
