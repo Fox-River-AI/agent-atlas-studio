@@ -62,6 +62,8 @@
   color: var(--text); font-size: 1rem; font-weight: 700; width: calc(100% - 1.8rem); box-sizing: border-box;
 }
 .atlas-palette-name:focus { outline: none; border-color: var(--accent); }
+.atlas-palette-of { margin: -0.3rem 0.9rem 0.5rem; font-size: 0.74rem; color: var(--text-dim); }
+.atlas-palette-of code { color: var(--text-muted); font-size: 0.72rem; }
 
 /* Coming-soon placeholder body */
 .atlas-soon-view { flex: 1; display: flex; align-items: center; justify-content: center; padding: 2rem; }

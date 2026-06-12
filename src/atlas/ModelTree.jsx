@@ -197,12 +197,20 @@ export default function ModelTree({
           className="atlas-palette-name"
           value={projectName || ''}
           onChange={(e) => onRenameProject(e.target.value)}
-          placeholder="Untitled model"
-          title="Model name — shared with the requirements project"
-          aria-label="Model name"
+          placeholder="Untitled declaration"
+          title="Declaration name — shared with the requirements project"
+          aria-label="Declaration name"
           spellCheck={false}
         />
       )}
+      {/* The declaration is OF a system — name it the way Erwin titles a model by
+          its target database. Reinforces the declared-vs-running split: the canvas
+          is the declaration, the system is the running thing it declares. */}
+      {(() => {
+        const orch = Object.values(objects).find((o) => o.kind === 'orchestrator');
+        const sys = orch?.data?.id;
+        return sys ? <div className="atlas-palette-of">declaration of <code>{sys}</code></div> : null;
+      })()}
 
       <div className="atlas-sa">
         <label>Subject Area</label>
