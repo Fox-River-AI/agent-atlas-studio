@@ -53,14 +53,33 @@ export default function MonitoringView() {
     () => buildAttestation(DECLARED_NODES, DECLARED_EDGES, trace, result),
     [result, trace]);
 
-  const exportAttestation = () => {
+  const [exportMsg, setExportMsg] = useState(null);
+  // Export the attestation. In Tauri the browser <a download> trick is a no-op
+  // (webview limitation) — use the native save dialog; on web, fall back to download.
+  const exportAttestation = async () => {
     const md = attestationMarkdown(attestation);
+    const fname = `${attestation.model}-conformance-attestation.md`;
+    const isTauri = typeof window !== 'undefined' && !!window.__TAURI_INTERNALS__;
+    if (isTauri) {
+      try {
+        const { save } = await import('@tauri-apps/plugin-dialog');
+        const { writeTextFile } = await import('@tauri-apps/plugin-fs');
+        const path = await save({ defaultPath: fname, filters: [{ name: 'Markdown', extensions: ['md'] }] });
+        if (!path) { setExportMsg('Export cancelled.'); return; }
+        await writeTextFile(path, md);
+        setExportMsg(`Attestation written → ${path}`);
+      } catch (e) {
+        setExportMsg(`Export failed: ${e?.message || e}`);
+      }
+      return;
+    }
     const blob = new Blob([md], { type: 'text/markdown' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
-    a.href = url; a.download = `${attestation.model}-conformance-attestation.md`;
+    a.href = url; a.download = fname;
     document.body.appendChild(a); a.click(); document.body.removeChild(a);
     URL.revokeObjectURL(url);
+    setExportMsg('Attestation downloaded (check your browser downloads).');
   };
 
   return (
@@ -107,6 +126,16 @@ export default function MonitoringView() {
               </div>
             );
           })}
+          {/* Violations of ABSENCE (e.g. declared telemetry never emitted) have no
+              span to flag — surface them as "expected but missing" rows once the
+              run finishes, so the trace and the diff reconcile. */}
+          {finished && result.violations.filter((v) => !v.spanId).map((v) => (
+            <div key={v.id} className="atlas-mon-span ran bad missing">
+              <span className="atlas-mon-span-kind">missing</span>
+              <span className="atlas-mon-span-who">{v.agentId} — declared span not emitted</span>
+              <span className="atlas-mon-span-flag">⚠ absent</span>
+            </div>
+          ))}
         </div>
 
         {/* Right: the conformance diff */}
@@ -156,6 +185,7 @@ export default function MonitoringView() {
               runtime span to the registry rule it breached. Mapped to the declared regimes, it is
               what an auditor reviews.
             </p>
+            {exportMsg && <p className="atlas-attest-exportmsg">{exportMsg}</p>}
             <div className="atlas-modal-actions">
               <button className="atlas-slider-reset" onClick={() => setShowAttestation(false)}>Close</button>
               <button className="primary" onClick={exportAttestation}>Export attestation (.md)</button>

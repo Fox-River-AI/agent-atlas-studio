@@ -95,6 +95,9 @@
 .atlas-mon-span-who { font-weight: 600; color: var(--text); flex: 1; }
 .atlas-mon-span-meta { font-size: 0.72rem; color: var(--text-muted); background: var(--bg); padding: 0.05rem 0.4rem; border-radius: 4px; }
 .atlas-mon-span-flag { color: var(--bad); font-weight: 700; font-size: 0.78rem; }
+.atlas-mon-span.missing { border-style: dashed; opacity: 0.85; }
+.atlas-mon-span.missing .atlas-mon-span-kind { color: var(--bad); }
+.atlas-attest-exportmsg { font-size: 0.85rem; color: var(--text-muted); margin: 0.4rem 0 0; }
 
 /* conformance diff */
 .atlas-mon-viol { border-left: 3px solid var(--bad); background: var(--bg-elevated); border-radius: 0 6px 6px 0; padding: 0.55rem 0.8rem; margin-bottom: 0.5rem; }
