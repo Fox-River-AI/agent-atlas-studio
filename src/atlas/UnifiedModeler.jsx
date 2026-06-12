@@ -20,7 +20,7 @@ import { blankData, CREATABLE_KINDS } from './blankData';
 import { canConnect, connectionReason, parentKindsFor } from './relationships';
 import { namedIssues } from './validationMessages';
 import './atlas.css';
-import { SEED_OBJECTS, SEED_EDGES, SEED_EXPANDED, SEED_SUBJECT_AREAS } from './seedModel';
+import { SEED_OBJECTS, SEED_EDGES, SEED_EXPANDED, SEED_SUBJECT_AREAS, SEED_REQUIREMENTS } from './seedModel';
 import { loadModel, saveModel, clearModel, saveRecovery, loadRecovery, clearRecovery } from './persistence';
 
 // The primary navigation. `ready` sections are live; the rest are the roadmap
@@ -70,7 +70,7 @@ export default function UnifiedModeler() {
   // The single requirements project — { name, text } or null until created.
   // Persisted with the model. The MODEL is canonical; this doc seeds it (DIAG-38)
   // and is rendered FROM it (DIAG-41).
-  const [requirements, setRequirements] = useState(null);
+  const [requirements, setRequirements] = useState(SEED_REQUIREMENTS); // demo requirements until a saved model hydrates
   // Subject Areas = saved views: { id, name, memberIds: [], hiddenIds: [] }. null = whole model.
   const [subjectAreas, setSubjectAreas] = useState(SEED_SUBJECT_AREAS);
   const [currentSA, setCurrentSA] = useState(null);
@@ -227,6 +227,7 @@ export default function UnifiedModeler() {
     setEdges(SEED_EDGES);
     setExpanded(SEED_EXPANDED);
     setSubjectAreas(SEED_SUBJECT_AREAS);
+    setRequirements(SEED_REQUIREMENTS); // restore the Requirements tab too — populate EVERYTHING
     setLayouts({});
     setViewports({});
     setCurrentSA(null);
