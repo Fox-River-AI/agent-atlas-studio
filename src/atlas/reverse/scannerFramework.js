@@ -39,6 +39,21 @@ export function pluginForLanguage(language) {
   return _plugins.find((p) => (p.languages || []).includes(language)) || null;
 }
 
+/**
+ * The plugin that handles a (language, hostKind) pair, or null. A plugin is eligible
+ * only if it BOTH claims the language AND runs on the repo's host runtime
+ * (`runtimes`: 'http' = a backend endpoint, 'studio' = in-process studio-side). This
+ * is what stops a Python repo on the Mac host from being routed to the backend HTTP
+ * scanner — same language, WRONG runtime.
+ */
+export function pluginForLanguageOnHost(language, hostKind) {
+  if (!language) return null;
+  return _plugins.find((p) =>
+    (p.languages || []).includes(language) &&
+    (p.runtimes || ['http']).includes(hostKind)
+  ) || null;
+}
+
 export function registeredScanners() {
   return _plugins.map((p) => ({ id: p.id, label: p.label, languages: p.languages }));
 }
@@ -64,15 +79,29 @@ export function asRecovered(raw, { notes = [], meta = null } = {}) {
 // Python scanner would produce garbage). Only when language is UNSET do we fall back
 // to the default plugin (the backend scanner), preserving today's behavior.
 export async function scanRepo(repo, ctx = {}) {
-  let plugin;
-  if (repo.language) {
-    plugin = pluginForLanguage(repo.language);
-    if (!plugin) {
-      throw new Error(`No scanner available for "${repo.label}" (language: ${repo.language}). That scanner isn't built yet — set a supported language or remove the repo.`);
+  // Dispatch is keyed by (language, host-runtime). A plugin is eligible only if it
+  // claims the language AND runs on the repo's host runtime (hostKind). ctx.hostScanKind:
+  // 'http' → a backend endpoint (the Python plugin); 'studio' → an in-process studio
+  // runtime (the TS scanner, DIAG-51 — not built yet). The host-runtime gate is what
+  // stops a Python-tagged repo on the Mac host from running the BACKEND scanner (same
+  // language, wrong machine → POSTs a foreign path → 400).
+  const hostKind = ctx.hostScanKind || 'http';
+  let plugin = repo.language ? pluginForLanguageOnHost(repo.language, hostKind) : null;
+
+  // No eligible plugin → say why precisely, by what's missing.
+  if (!plugin) {
+    if (!repo.language) {
+      // Unset language only falls back to the backend when the host IS the backend.
+      if (hostKind === 'http' && ctx.hostBaseUrl) plugin = pluginForLanguageOnHost('python', 'http') || _plugins.find((p) => (p.runtimes || ['http']).includes('http'));
+      if (!plugin) throw new Error(`Set a language for "${repo.label}" so the right scanner can handle it.`);
+    } else if (hostKind === 'studio') {
+      // A studio-host repo with no studio-side scanner yet (the common case today).
+      throw new Error(`No studio-side scanner for "${repo.label}" (${repo.language} on ${ctx.hostLabel || 'this Mac'}) yet — the in-app TypeScript/source scanner lands in DIAG-51. Until then, Mac repos browse but don’t scan.`);
+    } else if (!ctx.hostBaseUrl) {
+      throw new Error(`Can’t scan "${repo.label}" — its host (${ctx.hostLabel || 'unknown'}) has no reachable backend. Set the model endpoint, or move it to a reachable host.`);
+    } else {
+      throw new Error(`No scanner available for "${repo.label}" (${repo.language} on ${ctx.hostLabel || 'this host'}). That scanner isn’t built yet.`);
     }
-  } else {
-    plugin = ctx.defaultPlugin || _plugins[_plugins.length - 1];
-    if (!plugin) throw new Error('No scanner plugin registered.');
   }
   const recovered = await plugin.scan(repo, ctx);
   // Stamp provenance so the merge can tag objects by repo + language.

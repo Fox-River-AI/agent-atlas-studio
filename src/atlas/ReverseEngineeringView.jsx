@@ -18,6 +18,7 @@
 import React, { useState, useEffect } from 'react';
 import { scanRepo, mergeRecovered, registerScanner } from './reverse/scannerFramework';
 import { backendScanner } from './reverse/backendScanner';
+import { listDirStudio, isTauri } from './reverse/studioLister';
 
 // Register the built-in scanner plugins once (DIAG-50). The backend Python/host
 // scanner is plugin #1; future plugins (TS UI, SQL, Spark) register here too.
@@ -31,6 +32,35 @@ const LANGUAGES = [
   { id: 'sql', label: 'SQL' },
   { id: 'spark', label: 'Spark / Databricks' },
 ];
+
+// HOSTS — a real estate's repos live on DIFFERENT machines/runtimes (Noesis: 2
+// Python backends on the Axiom Linux host, the UI on this Mac; an enterprise: code
+// on a CI checkout, a Bedrock account, an Amplify build…). A repo is dispatched by
+// (host → which machine/runtime browses + scans it) AND (language → which parser).
+// Each host owns:
+//   - baseUrl:  where its /list-dir + /scan endpoints live (null = not reachable yet)
+//   - browsable: can the folder-browser navigate this host's filesystem today
+// The Axiom host's baseUrl is derived from the configured model endpoint. The
+// Studio-Mac host scans/browses IN this studio process (Node-side) — that runtime
+// is DIAG-51; until then it's declared (so the structure is production-correct) but
+// its browse is disabled with a clear reason. Add AWS/Bedrock/Aurora hosts the same
+// way later — no re-architecture, just another entry.
+const HOST_AXIOM = 'axiom-linux';
+const HOST_STUDIO = 'studio-mac';
+// browseKind: 'http' → call this host's HTTP /list-dir; 'studio' → list the LOCAL
+// filesystem in-process via Tauri fs (the Mac host has no server). browsable is set
+// at runtime (the Mac host only browses inside the desktop app, not browser dev).
+function hostsFor(endpointUrl, inTauri) {
+  const axiomBase = endpointUrl ? endpointUrl.replace(/generate-model\/?$/, '') : '';
+  return [
+    { id: HOST_AXIOM, label: 'Axiom · Linux backend', baseUrl: axiomBase, browseKind: 'http', browsable: !!axiomBase,
+      note: 'Python/SQL/Spark repos on the Axiom host. Browses + scans via the backend.' },
+    { id: HOST_STUDIO, label: 'Studio · this Mac', baseUrl: null, browseKind: 'studio', browsable: inTauri,
+      note: inTauri
+        ? 'Repos on this machine (e.g. the UI). Browses the local filesystem; scan runs studio-side (the TS scanner lands in DIAG-51).'
+        : 'Repos on this machine — folder browsing needs the desktop app (Tauri). In browser dev, add by typed path.' },
+  ];
+}
 
 const RESIDENCY = [
   { v: 'on-prem', label: 'On-prem data center (nothing leaves the boundary)' },
@@ -60,13 +90,21 @@ export default function ReverseEngineeringView({ endpointUrl, onReviewText, onAd
   const [repos, setRepos] = useState([]);          // the set to scan
   const [browseRoot, setBrowseRoot] = useState(''); // where the host browser starts
   const [pathInput, setPathInput] = useState('');   // free-text path being typed
+  const [typedHost, setTypedHost] = useState(HOST_AXIOM); // host for the typed-path add
   // Host folder browser: navigate the workspace filesystem to pick repo folders.
-  const [browse, setBrowse] = useState(null); // { path, parent, entries } | null
+  const [browse, setBrowse] = useState(null); // { path, parent, entries, hostId } | null
   const [browseBusy, setBrowseBusy] = useState(false);
 
-  // Derive sibling endpoint URLs (workspace/list-dir) from the generate URL. The
-  // scan URL itself is owned by the backend scanner plugin.
-  const base = (suffix) => (endpointUrl ? endpointUrl.replace(/generate-model\/?$/, suffix) : '');
+  const HOSTS = hostsFor(endpointUrl, isTauri());
+  const hostById = (id) => HOSTS.find((h) => h.id === id) || null;
+
+  // Endpoint URLs are per-HOST: the browse (/list-dir, /scan-workspace) and scan
+  // endpoints live on whichever machine owns the repo. base(suffix, hostId) builds
+  // the URL on that host (defaults to the Axiom host, today's behavior).
+  const base = (suffix, hostId = HOST_AXIOM) => {
+    const h = hostById(hostId);
+    return h && h.baseUrl ? h.baseUrl + suffix : '';
+  };
 
   // Learn where the host browser should start (the workspace root).
   useEffect(() => {
@@ -83,33 +121,54 @@ export default function ReverseEngineeringView({ endpointUrl, onReviewText, onAd
     return () => { cancelled = true; };
   }, [endpointUrl]);
 
-  // Open / navigate the scanner-host folder browser.
-  const openBrowse = (path) => navigate(path || browseRoot || '');
-  const navigate = async (path) => {
+  // Open / navigate the folder browser FOR a given host. Only browsable hosts (a
+  // reachable baseUrl) can be navigated; others tell the operator to use a typed path.
+  const openBrowse = (hostId = HOST_AXIOM) => {
+    const h = hostById(hostId);
+    if (!h || !h.browsable) {
+      setErr(`Can’t browse ${h ? h.label : 'that host'} yet — ${h?.note || 'no reachable endpoint'}. Add its repos by typed path.`);
+      return;
+    }
+    // Axiom starts at its backend-reported workspace root; the Mac starts at $HOME.
+    navigate(h.browseKind === 'http' ? (browseRoot || '') : '', hostId);
+  };
+  // Navigate ONE host. Axiom = HTTP /list-dir on the backend; Studio-Mac = local FS
+  // via Tauri. Both return the SAME { path, parent, entries } shape, so the modal
+  // renders either with no branching below this line.
+  const navigate = async (path, hostId) => {
+    const h = hostById(hostId);
     setErr(null); setBrowseBusy(true);
     try {
-      const res = await fetch(base('list-dir'), { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ path: path || undefined }) });
-      if (!res.ok) { const t = await res.text().catch(() => ''); throw new Error(`Browse failed: ${res.status} ${t.slice(0, 120)}`); }
-      setBrowse(await res.json());
+      let j;
+      if (h?.browseKind === 'studio') {
+        j = await listDirStudio(path || undefined);
+      } else {
+        const res = await fetch(base('list-dir', hostId), { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ path: path || undefined }) });
+        if (!res.ok) { const t = await res.text().catch(() => ''); throw new Error(`Browse failed: ${res.status} ${t.slice(0, 120)}`); }
+        j = await res.json();
+      }
+      setBrowse({ ...j, hostId });
     } catch (e) {
-      setErr(`Could not browse the workspace. [${e?.message || e}]`);
+      setErr(`Could not browse ${h?.label || 'the host'}. [${e?.message || e}]`);
     } finally { setBrowseBusy(false); }
   };
-  const addBrowsedRepo = (entry) => {
-    // carry the auto-detected language (the operator can override it in the list)
-    addRepo({ label: entry.name, path: entry.path, language: entry.language || '' });
+  const addBrowsedRepo = (entry, hostId) => {
+    // carry the auto-detected language + the host it was browsed on
+    addRepo({ label: entry.name, path: entry.path, language: entry.language || '', host: hostId });
   };
 
   const addRepo = (repo) => {
-    setRepos((rs) => rs.some((r) => r.path === repo.path) ? rs : [...rs, repo]);
+    setRepos((rs) => rs.some((r) => r.path === repo.path && r.host === repo.host) ? rs : [...rs, repo]);
   };
   const removeRepo = (i) => setRepos((rs) => rs.filter((_, j) => j !== i));
   const setRepoLanguage = (i, language) => setRepos((rs) => rs.map((r, j) => j === i ? { ...r, language } : r));
+  const setRepoHost = (i, host) => setRepos((rs) => rs.map((r, j) => j === i ? { ...r, host } : r));
   const addTypedPath = () => {
     const p = pathInput.trim();
     if (!p) return;
-    // typed paths have no auto-detect — default to unknown; operator picks the language
-    addRepo({ label: p.replace(/\/+$/, '').split('/').pop() || p, path: p, language: '' });
+    // typed paths have no auto-detect — default to unknown; operator picks the language.
+    // Host = whatever the typed-path host selector says (defaults to Axiom).
+    addRepo({ label: p.replace(/\/+$/, '').split('/').pop() || p, path: p, language: '', host: typedHost });
     setPathInput('');
   };
 
@@ -121,15 +180,30 @@ export default function ReverseEngineeringView({ endpointUrl, onReviewText, onAd
     if (!repos.length) { setErr('Add at least one codebase to scan.'); return; }
     setErr(null); setReview(null); setResult(null); setBusy(true);
     let acc = null;
+    const skipped = []; // repos that couldn't scan (no runtime yet, unreachable host)
     try {
       for (const repo of repos) {
-        const recovered = await scanRepo(repo, { endpointUrl });
-        acc = mergeRecovered(acc, recovered, repo.label);
+        // Each repo scans on ITS host. A repo whose (host, language) has no built
+        // scanner doesn't abort the batch — we scan what we can and report the rest,
+        // so a mixed estate (Python now, TS-on-Mac pending DIAG-51) still yields the
+        // recoverable part instead of failing wholesale.
+        const host = hostById(repo.host) || hostById(HOST_AXIOM);
+        try {
+          const recovered = await scanRepo(repo, { endpointUrl, hostBaseUrl: host?.baseUrl || null, hostLabel: host?.label, hostScanKind: host?.browseKind || 'http' });
+          acc = mergeRecovered(acc, recovered, repo.label);
+        } catch (e) {
+          skipped.push(`${repo.label}: ${e?.message || e}`);
+        }
       }
       if (acc?.orchestratorId) setOrchId(acc.orchestratorId);
       setResult(acc);
+      if (skipped.length) {
+        setErr(`Scanned ${acc ? acc.scannedRepos.length : 0} of ${repos.length}. Skipped:\n• ${skipped.join('\n• ')}`);
+      } else if (!acc) {
+        setErr('Nothing scanned — check the repos and try again.');
+      }
     } catch (e) {
-      setErr(`${e?.message || e} (backend reachable + CORS-open? path correct on the host?)`);
+      setErr(`${e?.message || e}`);
     } finally { setBusy(false); }
   };
 
@@ -229,6 +303,10 @@ export default function ReverseEngineeringView({ endpointUrl, onReviewText, onAd
               <li key={i}>
                 <span className="atlas-re-replabel">{r.label}</span>
                 <code className="atlas-re-reppath">{r.path}</code>
+                <select className="atlas-re-rephost" value={r.host || HOST_AXIOM} onChange={(e) => setRepoHost(i, e.target.value)}
+                  title="Host → which machine/runtime scans this repo">
+                  {HOSTS.map((h) => <option key={h.id} value={h.id}>{h.label}</option>)}
+                </select>
                 <select className="atlas-re-replang" value={r.language || ''} onChange={(e) => setRepoLanguage(i, e.target.value)}
                   title="Language → which scanner handles this repo">
                   <option value="">language…</option>
@@ -240,11 +318,25 @@ export default function ReverseEngineeringView({ endpointUrl, onReviewText, onAd
           </ul>
         )}
         <div className="atlas-re-repoadd">
-          <button className="atlas-re-browsebtn" onClick={() => openBrowse()} disabled={!endpointUrl} title="Browse the workspace filesystem to pick repo folders">🗀 Browse workspace…</button>
-          <input value={pathInput} onChange={(e) => setPathInput(e.target.value)}
-            onKeyDown={(e) => { if (e.key === 'Enter') addTypedPath(); }}
-            placeholder="…or type a repo path in the workspace" />
-          <button onClick={addTypedPath} disabled={!pathInput.trim()}>+ Add path</button>
+          {/* One browse button per host — repos live on different machines. A host
+              with no reachable runtime (Studio-Mac until DIAG-51) is shown disabled
+              with its reason, so the operator knows to use a typed path instead. */}
+          {HOSTS.map((h) => (
+            <button key={h.id} className="atlas-re-browsebtn" onClick={() => openBrowse(h.id)}
+              disabled={!h.browsable} title={h.browsable ? `Browse ${h.label}` : h.note}>
+              🗀 Browse {h.label}{!h.browsable && ' (typed path only)'}
+            </button>
+          ))}
+          <span className="atlas-re-addpath">
+            <select className="atlas-re-rephost" value={typedHost} onChange={(e) => setTypedHost(e.target.value)}
+              title="Which host this path is on">
+              {HOSTS.map((h) => <option key={h.id} value={h.id}>{h.label}</option>)}
+            </select>
+            <input value={pathInput} onChange={(e) => setPathInput(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') addTypedPath(); }}
+              placeholder="…or type a repo path on that host" />
+            <button onClick={addTypedPath} disabled={!pathInput.trim()}>+ Add path</button>
+          </span>
         </div>
       </div>
 
@@ -253,11 +345,11 @@ export default function ReverseEngineeringView({ endpointUrl, onReviewText, onAd
         <div className="atlas-modal-backdrop" onClick={() => setBrowse(null)}>
           <div className="atlas-modal atlas-re-browser" onClick={(e) => e.stopPropagation()}>
             <div className="atlas-re-browser-head">
-              <h3>Code workspace — pick repo folders</h3>
+              <h3>{hostById(browse.hostId)?.label || 'Code workspace'} — pick repo folders</h3>
               <button className="atlas-re-browser-x" onClick={() => setBrowse(null)}>×</button>
             </div>
             <div className="atlas-re-browser-bar">
-              <button disabled={!browse.parent || browseBusy} onClick={() => navigate(browse.parent)} title="Up">↑</button>
+              <button disabled={!browse.parent || browseBusy} onClick={() => navigate(browse.parent, browse.hostId)} title="Up">↑</button>
               <code className="atlas-re-browser-path">{browse.path}</code>
             </div>
             <div className="atlas-re-browser-list">
@@ -265,20 +357,20 @@ export default function ReverseEngineeringView({ endpointUrl, onReviewText, onAd
               {!browseBusy && browse.entries.length === 0 && <div className="atlas-empty">No subfolders here.</div>}
               {!browseBusy && browse.entries.map((e) => (
                 <div key={e.path} className="atlas-re-browser-row">
-                  <button className="atlas-re-browser-open" onClick={() => navigate(e.path)} title="Open">
+                  <button className="atlas-re-browser-open" onClick={() => navigate(e.path, browse.hostId)} title="Open">
                     🗀 {e.name} {e.isRepo && <span className="atlas-re-browser-repo">repo</span>}
                     {e.language && <span className="atlas-re-browser-lang">{e.language}</span>}
                   </button>
-                  <button className="atlas-re-browser-add" disabled={repos.some((r) => r.path === e.path)} onClick={() => addBrowsedRepo(e)}>
-                    {repos.some((r) => r.path === e.path) ? 'added' : '+ add'}
+                  <button className="atlas-re-browser-add" disabled={repos.some((r) => r.path === e.path && r.host === browse.hostId)} onClick={() => addBrowsedRepo(e, browse.hostId)}>
+                    {repos.some((r) => r.path === e.path && r.host === browse.hostId) ? 'added' : '+ add'}
                   </button>
                 </div>
               ))}
             </div>
             <p className="atlas-re-browser-foot">
-              Browsing the <strong>code workspace</strong> ({browseRoot}). Reverse engineering analyzes source, not
-              live infra — clone/checkout all the repos that make up the system into the workspace (any language,
-              any origin: GitHub/CodeCommit/Azure DevOps), then pick the ones to scan.
+              Browsing <strong>{hostById(browse.hostId)?.label || 'a host'}</strong> ({browse.path}). A real system’s
+              repos span machines — browse each reachable host, or add repos on other hosts by typed path. Reverse
+              engineering analyzes source, not live infra (any language, any origin: GitHub/CodeCommit/Azure DevOps).
             </p>
             <div className="atlas-modal-actions">
               <button onClick={() => setBrowse(null)}>Done</button>
@@ -287,7 +379,7 @@ export default function ReverseEngineeringView({ endpointUrl, onReviewText, onAd
         </div>
       )}
 
-      {err && <div className="atlas-re-msg err">{err}</div>}
+      {err && <div className="atlas-re-msg err" style={{ whiteSpace: 'pre-line' }}>{err}</div>}
 
       {result && (
         <div className="atlas-re-body">

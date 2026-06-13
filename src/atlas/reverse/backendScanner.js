@@ -16,11 +16,18 @@ export const backendScanner = {
   id: 'backend-python',
   label: 'Backend code scanner (Python/host)',
   languages: ['python', 'sql', 'spark'],
+  runtimes: ['http'], // runs against a backend HTTP endpoint — NOT studio-side. A
+                      // studio-host repo (the Mac) is never routed here, even if its
+                      // language matches; that's the DIAG-51 studio scanner's job.
   async scan(repo, ctx) {
-    const { endpointUrl } = ctx;
-    if (!endpointUrl) throw new Error('No scan endpoint configured. Set the model endpoint in Settings.');
+    // Scan on the repo's HOST: prefer the host's base URL (so a multi-host estate
+    // hits the right machine); fall back to the configured endpoint (single-host).
+    const { endpointUrl, hostBaseUrl } = ctx;
+    const scanUrl = hostBaseUrl ? hostBaseUrl.replace(/\/?$/, '/') + 'scan-codebase'
+                  : (endpointUrl ? scanUrlFrom(endpointUrl) : '');
+    if (!scanUrl) throw new Error(`No scan endpoint for "${repo.label}" — ${ctx.hostLabel || 'its host'} isn’t reachable. Set the model endpoint in Settings.`);
     const body = { root: repo.path };
-    const res = await fetch(scanUrlFrom(endpointUrl), {
+    const res = await fetch(scanUrl, {
       method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body),
     });
     if (!res.ok) throw new Error(`Scan of "${repo.label}" returned ${res.status} ${res.statusText}.`);

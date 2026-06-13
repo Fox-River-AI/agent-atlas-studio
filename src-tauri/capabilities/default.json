@@ -14,6 +14,7 @@
     "fs:allow-write-text-file",
     "fs:allow-write-file",
     "fs:allow-read-text-file",
+    "fs:allow-read-dir",
     "fs:allow-exists",
     "fs:allow-remove",
     "fs:allow-mkdir",
@@ -23,6 +24,7 @@
     {
       "identifier": "fs:scope",
       "allow": [
+        { "path": "$HOME" },
         { "path": "$HOME/**" },
         { "path": "$HOME/**/.*" },
         { "path": "$HOME/**/.*/**" },
