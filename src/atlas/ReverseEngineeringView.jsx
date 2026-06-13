@@ -23,6 +23,15 @@ import { backendScanner } from './reverse/backendScanner';
 // scanner is plugin #1; future plugins (TS UI, SQL, Spark) register here too.
 registerScanner(backendScanner);
 
+// Languages the operator can tag a repo with → routes it to a scanner plugin (and
+// its runtime). Auto-detected on browse; overridable here. Extensible (DIAG-50).
+const LANGUAGES = [
+  { id: 'python', label: 'Python' },
+  { id: 'typescript', label: 'TypeScript / React' },
+  { id: 'sql', label: 'SQL' },
+  { id: 'spark', label: 'Spark / Databricks' },
+];
+
 const RESIDENCY = [
   { v: 'on-prem', label: 'On-prem data center (nothing leaves the boundary)' },
   { v: 'in-region', label: 'Cloud, region-pinned (AWS/Azure/GCP, in-region)' },
@@ -87,17 +96,20 @@ export default function ReverseEngineeringView({ endpointUrl, onReviewText, onAd
     } finally { setBrowseBusy(false); }
   };
   const addBrowsedRepo = (entry) => {
-    addRepo({ label: entry.name, path: entry.path });
+    // carry the auto-detected language (the operator can override it in the list)
+    addRepo({ label: entry.name, path: entry.path, language: entry.language || '' });
   };
 
   const addRepo = (repo) => {
     setRepos((rs) => rs.some((r) => r.path === repo.path) ? rs : [...rs, repo]);
   };
   const removeRepo = (i) => setRepos((rs) => rs.filter((_, j) => j !== i));
+  const setRepoLanguage = (i, language) => setRepos((rs) => rs.map((r, j) => j === i ? { ...r, language } : r));
   const addTypedPath = () => {
     const p = pathInput.trim();
     if (!p) return;
-    addRepo({ label: p.replace(/\/+$/, '').split('/').pop() || p, path: p });
+    // typed paths have no auto-detect — default to unknown; operator picks the language
+    addRepo({ label: p.replace(/\/+$/, '').split('/').pop() || p, path: p, language: '' });
     setPathInput('');
   };
 
@@ -217,6 +229,11 @@ export default function ReverseEngineeringView({ endpointUrl, onReviewText, onAd
               <li key={i}>
                 <span className="atlas-re-replabel">{r.label}</span>
                 <code className="atlas-re-reppath">{r.path}</code>
+                <select className="atlas-re-replang" value={r.language || ''} onChange={(e) => setRepoLanguage(i, e.target.value)}
+                  title="Language → which scanner handles this repo">
+                  <option value="">language…</option>
+                  {LANGUAGES.map((l) => <option key={l.id} value={l.id}>{l.label}</option>)}
+                </select>
                 <button className="atlas-re-repx" onClick={() => removeRepo(i)} title="Remove">×</button>
               </li>
             ))}
@@ -250,6 +267,7 @@ export default function ReverseEngineeringView({ endpointUrl, onReviewText, onAd
                 <div key={e.path} className="atlas-re-browser-row">
                   <button className="atlas-re-browser-open" onClick={() => navigate(e.path)} title="Open">
                     🗀 {e.name} {e.isRepo && <span className="atlas-re-browser-repo">repo</span>}
+                    {e.language && <span className="atlas-re-browser-lang">{e.language}</span>}
                   </button>
                   <button className="atlas-re-browser-add" disabled={repos.some((r) => r.path === e.path)} onClick={() => addBrowsedRepo(e)}>
                     {repos.some((r) => r.path === e.path) ? 'added' : '+ add'}

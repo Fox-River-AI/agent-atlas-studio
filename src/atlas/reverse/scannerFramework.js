@@ -58,12 +58,22 @@ export function asRecovered(raw, { notes = [], meta = null } = {}) {
 }
 
 // ── Dispatch: scan ONE repo via its language's plugin ─────────────────────────
-// `repo` = { label, path?, preset?, language }. If no language/plugin resolves, we
-// fall back to the default plugin (the backend Python scanner) so today's behavior
-// is unchanged until language tagging (DIAG-55) lands.
+// `repo` = { label, path, language }. The language tag picks the plugin (and its
+// runtime). If a language is EXPLICITLY tagged but no plugin handles it, fail with a
+// clear message — do NOT silently fall back (e.g. routing a TypeScript repo to the
+// Python scanner would produce garbage). Only when language is UNSET do we fall back
+// to the default plugin (the backend scanner), preserving today's behavior.
 export async function scanRepo(repo, ctx = {}) {
-  const plugin = pluginForLanguage(repo.language) || ctx.defaultPlugin || _plugins[_plugins.length - 1];
-  if (!plugin) throw new Error('No scanner plugin registered.');
+  let plugin;
+  if (repo.language) {
+    plugin = pluginForLanguage(repo.language);
+    if (!plugin) {
+      throw new Error(`No scanner available for "${repo.label}" (language: ${repo.language}). That scanner isn't built yet — set a supported language or remove the repo.`);
+    }
+  } else {
+    plugin = ctx.defaultPlugin || _plugins[_plugins.length - 1];
+    if (!plugin) throw new Error('No scanner plugin registered.');
+  }
   const recovered = await plugin.scan(repo, ctx);
   // Stamp provenance so the merge can tag objects by repo + language.
   return { ...recovered, meta: { ...(recovered.meta || {}), repo: repo.label, language: plugin.languages?.[0] || repo.language || 'unknown', scanner: plugin.id } };
