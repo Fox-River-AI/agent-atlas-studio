@@ -865,3 +865,32 @@
 .atlas-reqview-preview th, .atlas-reqview-preview td { border: 1px solid var(--border-soft); padding: 0.4em 0.7em; text-align: left; }
 .atlas-reqview-preview th { background: var(--bg-elevated); font-weight: 700; }
 .atlas-reqview-preview hr { border: none; border-top: 1px solid var(--border-soft); margin: 1.2em 0; }
+
+/* Compare view (model-vs-model diff) */
+.atlas-cmp { padding: 1rem 1.2rem; max-width: 60rem; }
+.atlas-cmp-head h2 { margin: 0 0 0.2rem; }
+.atlas-cmp-sub { color: var(--text-muted); font-size: 0.86rem; max-width: 48rem; line-height: 1.5; }
+.atlas-cmp-load { display: flex; flex-wrap: wrap; gap: 1rem; align-items: center; margin: 1rem 0; padding: 0.7rem 0.9rem; border: 1px solid var(--border-soft); border-radius: 7px; background: var(--bg-elevated); }
+.atlas-cmp-side { display: flex; flex-direction: column; gap: 0.25rem; min-width: 14rem; }
+.atlas-cmp-sidelabel { font-weight: 700; font-size: 0.85rem; color: var(--text); }
+.atlas-cmp-count { font-size: 0.74rem; color: var(--text-muted); }
+.atlas-cmp-side button { margin-top: 0.3rem; align-self: flex-start; border: 1px solid var(--border-soft); background: var(--bg); color: var(--text); border-radius: 5px; padding: 0.35rem 0.7rem; font-size: 0.8rem; font-weight: 600; cursor: pointer; }
+.atlas-cmp-baseline { display: flex; flex-direction: column; gap: 0.25rem; font-size: 0.78rem; color: var(--text-muted); }
+.atlas-cmp-baseline select { background: var(--bg); color: var(--text); border: 1px solid var(--border-soft); border-radius: 5px; padding: 0.2rem 0.4rem; font-size: 0.8rem; }
+.atlas-cmp-err { color: var(--bad); font-size: 0.83rem; margin: 0.4rem 0; }
+.atlas-cmp-empty { color: var(--text-muted); font-style: italic; }
+.atlas-cmp-summary { display: flex; align-items: baseline; gap: 0.6rem; font-size: 0.88rem; color: var(--text); }
+.atlas-cmp-distance { font-size: 1.8rem; font-weight: 800; color: var(--text); }
+.atlas-cmp-dir { font-size: 0.78rem; color: var(--text-muted); margin: 0.2rem 0 0.8rem; }
+.atlas-cmp-cat { margin-bottom: 0.4rem; border: 1px solid var(--border-soft); border-radius: 6px; overflow: hidden; }
+.atlas-cmp-cat.muted { opacity: 0.7; }
+.atlas-cmp-cathead { width: 100%; text-align: left; background: var(--bg-elevated); color: var(--text); border: none; padding: 0.45rem 0.7rem; font-size: 0.84rem; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 0.5rem; }
+.atlas-cmp-catcount { display: inline-flex; min-width: 1.4rem; height: 1.4rem; align-items: center; justify-content: center; border-radius: 4px; font-weight: 800; font-size: 0.78rem; background: var(--bg); }
+.cat-unbuilt .atlas-cmp-catcount { color: var(--accent); }
+.cat-drifted .atlas-cmp-catcount { color: var(--warn, #d98800); }
+.cat-moved .atlas-cmp-catcount { color: var(--warn, #d98800); }
+.cat-shadow .atlas-cmp-catcount { color: var(--bad); }
+.atlas-cmp-chev { margin-left: auto; color: var(--text-dim); }
+.atlas-cmp-catlist { margin: 0; padding: 0.4rem 0.9rem 0.6rem 1.6rem; font-size: 0.8rem; color: var(--text); line-height: 1.5; }
+.atlas-cmp-catlist li { margin: 0.15rem 0; }
+.atlas-cmp-notes { margin: 0.9rem 0 0; padding-left: 1.2rem; font-size: 0.8rem; color: var(--text-muted); line-height: 1.5; }

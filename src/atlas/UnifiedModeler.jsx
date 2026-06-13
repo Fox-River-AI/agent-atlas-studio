@@ -9,6 +9,7 @@ import UnifiedGraph from './UnifiedGraph';
 import PropertiesPanel from './PropertiesPanel';
 import MonitoringView from './MonitoringView';
 import ReverseEngineeringView from './ReverseEngineeringView';
+import CompareView from './CompareView';
 import ModelTree from './ModelTree';
 import RequirementsView from './RequirementsView';
 import { SettingsModal, AboutModal } from './Modals';
@@ -34,8 +35,8 @@ const SECTIONS = [
     blurb: 'Declared-vs-running conformance: replay a run, catch drift, attest.' },
   { id: 'reverse', label: 'Reverse Eng', ready: true,
     blurb: 'Recover a declaration from an existing codebase, then surface what isn’t governed.' },
-  { id: 'compare', label: 'Compare', ready: false,
-    blurb: 'Diff two models — versions, or declared-vs-discovered.' },
+  { id: 'compare', label: 'Compare', ready: true,
+    blurb: 'Diff two declarations — declared-vs-discovered, or current-vs-target. The diff is the change set.' },
 ];
 
 // Properties-panel width is user-resizable (some kinds have long field values).
@@ -1018,6 +1019,8 @@ export default function UnifiedModeler() {
             setSection('model');
           }}
         />
+       ) : section === 'compare' ? (
+        <CompareView liveModel={{ objects, edges }} />
        ) : section !== 'model' ? (
         (() => {
           const s = SECTIONS.find((x) => x.id === section);
