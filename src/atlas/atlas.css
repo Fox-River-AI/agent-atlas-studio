@@ -894,3 +894,8 @@
 .atlas-cmp-catlist { margin: 0; padding: 0.4rem 0.9rem 0.6rem 1.6rem; font-size: 0.8rem; color: var(--text); line-height: 1.5; }
 .atlas-cmp-catlist li { margin: 0.15rem 0; }
 .atlas-cmp-notes { margin: 0.9rem 0 0; padding-left: 1.2rem; font-size: 0.8rem; color: var(--text-muted); line-height: 1.5; }
+
+/* RE: no-control-plane structural finding banner + Atlas Baseline tag */
+.atlas-re-noctrl { border: 1px solid color-mix(in srgb, var(--warn, #d98800) 55%, var(--border-soft)); background: color-mix(in srgb, var(--warn, #d98800) 12%, var(--bg)); border-radius: 6px; padding: 0.55rem 0.8rem; margin-bottom: 0.7rem; font-size: 0.82rem; color: var(--text); line-height: 1.5; }
+.atlas-re-noctrl code { background: var(--bg-elevated); padding: 0 0.25rem; border-radius: 3px; }
+.atlas-re-baseline-tag { display: inline-block; font-size: 0.66rem; font-weight: 800; letter-spacing: 0.04em; text-transform: uppercase; color: var(--accent); border: 1px solid var(--accent); border-radius: 4px; padding: 0 0.3rem; }

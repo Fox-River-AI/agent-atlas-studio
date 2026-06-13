@@ -473,6 +473,24 @@ export default function ReverseEngineeringView({ endpointUrl, onReviewText, onAd
           <div className="atlas-re-cols">
             <div className="atlas-re-estate">
               <div className="atlas-re-coltitle">Recovered estate</div>
+              {(() => {
+                // Control-plane honesty banner: if the only orchestrator is INFERRED,
+                // the code has NO control plane — say so loudly (structural finding),
+                // don't let a synthetic node read as a real recovered orchestrator.
+                const orch = objs.find((o) => o.kind === 'orchestrator');
+                if (orch && orch.data?._inferred) {
+                  return (
+                    <div className="atlas-re-noctrl">
+                      ⚙ <strong>No control plane in the code.</strong> The {byKind('agent').length} agents run
+                      un-orchestrated (no LangGraph/StateGraph; wired ad-hoc). “<code>{orch.id}</code>” is an
+                      <em> inferred</em> placeholder for layout — it does not exist in the code, and no control edges
+                      were drawn. <span className="atlas-re-baseline-tag">ATLAS Baseline</span> recommends a root
+                      orchestrator (best practice, not a regulatory requirement).
+                    </div>
+                  );
+                }
+                return null;
+              })()}
               {['agent', 'tool', 'system'].map((kind) => (
                 <div key={kind} className="atlas-re-group">
                   <div className="atlas-re-grouphd">{kind === 'agent' ? 'Agents (workers + MCP servers)' : kind === 'tool' ? 'Tools (MCP)' : 'Systems (datastores / LLM)'}</div>

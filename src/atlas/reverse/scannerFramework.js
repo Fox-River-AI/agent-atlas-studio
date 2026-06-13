@@ -132,7 +132,16 @@ export function mergeRecovered(prev, recovered, repoLabel) {
   for (const o of Object.values(recovered.objects || {})) {
     if (o.kind === 'orchestrator') {
       if (!orch) {
-        orch = { ...o, id: 'recovered-orchestrator', data: { ...o.data, id: 'recovered-orchestrator', description: 'Inferred union control plane across the scanned codebases.' } };
+        // Keep ONE union root. Preserve the _inferred flag + honest description — a
+        // backend that found no control plane sent a synthetic node; the union root
+        // is equally synthetic across repos. Don't overwrite it into a real-looking
+        // "control plane" (that would re-introduce the false-picture problem).
+        const inferred = o.data?._inferred;
+        orch = { ...o, id: 'inferred-orchestrator', data: { ...o.data, id: 'inferred-orchestrator',
+          _inferred: true,
+          description: inferred
+            ? 'INFERRED union root across the scanned codebases — the code declares NO single control plane. Synthetic; for tree layout only, no control edges drawn.'
+            : (o.data?.description || 'Union root across the scanned codebases.') } };
         objects[orch.id] = orch;
       }
       continue; // drop per-source orchestrators; keep one union root
