@@ -16,7 +16,12 @@
 //
 // Demo-isolated: own component, own endpoints; touches no demo-path code.
 import React, { useState, useEffect } from 'react';
-import { normalizeGeneratedModel } from './normalizeModel';
+import { scanRepo, mergeRecovered, registerScanner } from './reverse/scannerFramework';
+import { backendScanner } from './reverse/backendScanner';
+
+// Register the built-in scanner plugins once (DIAG-50). The backend Python/host
+// scanner is plugin #1; future plugins (TS UI, SQL, Spark) register here too.
+registerScanner(backendScanner);
 
 const RESIDENCY = [
   { v: 'on-prem', label: 'On-prem data center (nothing leaves the boundary)' },
@@ -27,7 +32,7 @@ const REGIMES = ['HIPAA', 'SOC 2', 'GDPR', 'PCI-DSS', 'FedRAMP', 'EU AI Act', 'H
 
 export default function ReverseEngineeringView({ endpointUrl, onReviewText, onAdopt }) {
   const [busy, setBusy] = useState(false);
-  const [result, setResult] = useState(null); // { model, notes, scannedRoot }
+  const [result, setResult] = useState(null); // framework estate: { objects, edges, notes, scannedRepos, orchestratorId }
   const [err, setErr] = useState(null);
 
   // Core-4 intake (Bucket-A facts not in the code).
@@ -51,8 +56,9 @@ export default function ReverseEngineeringView({ endpointUrl, onReviewText, onAd
   const [browse, setBrowse] = useState(null); // { path, parent, entries } | null
   const [browseBusy, setBrowseBusy] = useState(false);
 
+  // Derive sibling endpoint URLs (presets/list-dir) from the generate URL. The scan
+  // URL itself is owned by the backend scanner plugin now.
   const base = (suffix) => (endpointUrl ? endpointUrl.replace(/generate-model\/?$/, suffix) : '');
-  const scanUrl = base('scan-codebase');
 
   // Pull any known-repo shortcuts the backend offers (optional — the operator can
   // always just type paths). These are convenience, not the source of truth.
@@ -97,7 +103,9 @@ export default function ReverseEngineeringView({ endpointUrl, onReviewText, onAd
     setPathInput('');
   };
 
-  // Scan every repo in the set into ONE recovered estate (accumulate + dedupe).
+  // Scan every repo in the set into ONE recovered estate, via the pluggable
+  // framework: each repo is dispatched to its language's scanner plugin, and the
+  // results are merged (dedupe + single union orchestrator) into one estate.
   const scanAll = async () => {
     if (!endpointUrl) { setErr('No scan endpoint configured. Set the model endpoint in Settings.'); return; }
     if (!repos.length) { setErr('Add at least one codebase to scan.'); return; }
@@ -105,65 +113,29 @@ export default function ReverseEngineeringView({ endpointUrl, onReviewText, onAd
     let acc = null;
     try {
       for (const repo of repos) {
-        const body = repo.preset ? { preset: repo.preset } : { root: repo.path };
-        const res = await fetch(scanUrl, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
-        if (!res.ok) { throw new Error(`Scan of "${repo.label}" returned ${res.status} ${res.statusText}.`); }
-        const json = await res.json();
-        const { model } = normalizeGeneratedModel(json.declaration || {});
-        // Dedupe by id (same datastore/agent across repos = one object), tag source,
-        // single union orchestrator. Re-scanning refreshes.
-        acc = mergeScan(acc, model, repo.label, json.notes || []);
+        const recovered = await scanRepo(repo, { endpointUrl });
+        acc = mergeRecovered(acc, recovered, repo.label);
       }
+      if (acc?.orchestratorId) setOrchId(acc.orchestratorId);
       setResult(acc);
     } catch (e) {
       setErr(`${e?.message || e} (backend reachable + CORS-open? path correct on the host?)`);
     } finally { setBusy(false); }
   };
 
-  // Merge a fresh scan into the accumulated recovered estate.
-  function mergeScan(prev, model, repo, notes) {
-    const objects = { ...(prev?.model.objects || {}) };
-    const scannedRepos = [...new Set([...(prev?.scannedRepos || []), repo])];
-    const newObjs = Object.values(model.objects);
-    // Pick/keep a single union orchestrator.
-    let orch = Object.values(objects).find((o) => o.kind === 'orchestrator');
-    for (const o of newObjs) {
-      if (o.kind === 'orchestrator') {
-        if (!orch) { orch = { ...o, id: 'noesis-recovered-orchestrator', data: { ...o.data, id: 'noesis-recovered-orchestrator', description: 'Inferred union control plane across the scanned repos.' } }; objects[orch.id] = orch; }
-        continue; // drop per-repo orchestrators in favor of the single union one
-      }
-      const tagged = { ...o, data: { ...o.data, _repo: repo } };
-      // dedupe by id: an existing object (same datastore/tool) is kept; we just
-      // append the repo tag so it's clear both repos touch it.
-      if (objects[o.id]) {
-        const ex = objects[o.id];
-        const repos = new Set([...(String(ex.data?._repo || '').split(',').filter(Boolean)), repo]);
-        ex.data._repo = [...repos].join(',');
-      } else {
-        objects[o.id] = tagged;
-      }
-    }
-    // re-parent every rootless non-orchestrator object under the union orchestrator
-    if (orch) for (const o of Object.values(objects)) {
-      if (o.kind !== 'orchestrator' && !o.parent) o.parent = orch.id;
-    }
-    if (orch) setOrchId(orch.id);
-    const allNotes = [...(prev?.notes || []), ...notes.map((n) => `[${repo}] ${n}`)];
-    return { model: { objects, edges: prev?.model.edges || [], subjectAreas: [] }, notes: allNotes, scannedRepos };
-  }
-
   const clearScan = () => { setResult(null); setReview(null); };
 
-  const objs = result ? Object.values(result.model.objects) : [];
+  // result is now the framework's merged estate: { objects, edges, notes, scannedRepos, orchestratorId }.
+  const objs = result ? Object.values(result.objects) : [];
   const byKind = (k) => objs.filter((o) => o.kind === k);
   const toggleRegime = (r) => setRegimes((rs) => rs.includes(r) ? rs.filter((x) => x !== r) : [...rs, r]);
 
-  // Apply the Core-4 intake estate-wide, returning a new model. Residency → every
-  // system + agent governance; regimes → the orchestrator; name/orch → the control
-  // plane object. We DECLARE only what the operator stated; everything else stays a
-  // gap for the per-object review.
-  const applyIntake = (model) => {
-    const objects = JSON.parse(JSON.stringify(model.objects));
+  // Apply the Core-4 intake estate-wide, returning a declaration model
+  // {objects, edges, subjectAreas} ready to adopt. Residency → every system + agent
+  // governance; regimes → the orchestrator; name/orch → the control plane object. We
+  // DECLARE only what the operator stated; everything else stays a gap for review.
+  const applyIntake = (estate) => {
+    const objects = JSON.parse(JSON.stringify(estate.objects));
     const list = Object.values(objects);
     for (const o of list) { if (o.data && '_repo' in o.data) delete o.data._repo; } // strip UI-only tag
     const orch = orchId && objects[orchId] && objects[orchId].kind === 'orchestrator' ? objects[orchId] : list.find((o) => o.kind === 'orchestrator');
@@ -177,7 +149,7 @@ export default function ReverseEngineeringView({ endpointUrl, onReviewText, onAd
         o.data.governance = { ...(o.data.governance || {}), residency };
       }
     }
-    return { ...model, objects };
+    return { objects, edges: estate.edges || [], subjectAreas: [] };
   };
 
   // Synthesize a requirements-style description of the recovered (post-intake)
@@ -207,7 +179,7 @@ export default function ReverseEngineeringView({ endpointUrl, onReviewText, onAd
     if (!onReviewText || !result) return;
     setErr(null); setReview(null); setReviewBusy(true);
     try {
-      const enriched = applyIntake(result.model);
+      const enriched = applyIntake(result);
       const r = await onReviewText(synthDescription(enriched));
       setReview(r || { summary: '', recommendations: [] });
     } catch (e) {
@@ -215,7 +187,7 @@ export default function ReverseEngineeringView({ endpointUrl, onReviewText, onAd
     } finally { setReviewBusy(false); }
   };
 
-  const adopt = () => { if (onAdopt && result) onAdopt(applyIntake(result.model)); };
+  const adopt = () => { if (onAdopt && result) onAdopt(applyIntake(result)); };
 
   const counts = result ? { agents: byKind('agent').length, tools: byKind('tool').length, systems: byKind('system').length } : null;
 
