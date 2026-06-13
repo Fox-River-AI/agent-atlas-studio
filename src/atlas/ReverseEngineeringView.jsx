@@ -218,7 +218,15 @@ export default function ReverseEngineeringView({ endpointUrl, onReviewText, onAd
         const cov = coverageFinding(censuses, scannedLangs);
         acc = { ...acc, notes: [...(acc.notes || []), ...cov.notes], coverage: cov };
       }
-      if (acc?.orchestratorId) setOrchId(acc.orchestratorId);
+      // Only auto-select a control plane if a REAL one was recovered. An inferred
+      // orchestrator (synthetic, not in code) must NOT auto-fill the intake — that
+      // would assert a control plane the system doesn't have. Default to "none".
+      const recoveredOrch = acc ? Object.values(acc.objects).find((o) => o.kind === 'orchestrator') : null;
+      if (acc?.orchestratorId && recoveredOrch && !recoveredOrch.data?._inferred) {
+        setOrchId(acc.orchestratorId);
+      } else {
+        setOrchId(''); // honest: no real control plane → "no single control plane"
+      }
       setResult(acc);
       if (skipped.length) {
         setErr(`Scanned ${acc ? acc.scannedRepos.length : 0} of ${repos.length}. Skipped:\n• ${skipped.join('\n• ')}`);
@@ -269,7 +277,13 @@ export default function ReverseEngineeringView({ endpointUrl, onReviewText, onAd
     L.push('');
     L.push('This declaration was RECOVERED by scanning an existing codebase. Structure is known; governance is NOT (it was not in the code). Review for what must be declared.');
     L.push('');
-    if (orch) L.push(`Control plane: ${orch.id}. Compliance regimes the system claims: ${(orch.data.complianceRegimes || []).join(', ') || 'NONE DECLARED'}. Residency: ${residency || 'NOT DECLARED'}.`);
+    if (orch && orch.data?._inferred) {
+      // Tell the review the truth: there is NO control plane. The review should treat
+      // this as a STRUCTURAL gap, not a place to attach control-plane-level policy.
+      L.push(`Control plane: NONE — the code has no orchestrator/control plane; agents run un-orchestrated (ad-hoc wiring). This is a structural governance gap: no single point enforces refusal, audit, or human-approval across agents. Compliance regimes the system claims: ${regimes.join(', ') || 'NONE DECLARED'}. Residency: ${residency || 'NOT DECLARED'}.`);
+    } else if (orch) {
+      L.push(`Control plane: ${orch.id}. Compliance regimes the system claims: ${(orch.data.complianceRegimes || []).join(', ') || 'NONE DECLARED'}. Residency: ${residency || 'NOT DECLARED'}.`);
+    }
     L.push('');
     L.push('## Agents (recovered)');
     for (const a of list.filter((o) => o.kind === 'agent')) L.push(`- ${a.id}: ${a.data.responsibility || 'recovered worker'}`);
@@ -439,8 +453,15 @@ export default function ReverseEngineeringView({ endpointUrl, onReviewText, onAd
               </label>
               <label>Control plane / orchestrator
                 <select value={orchId} onChange={(e) => setOrchId(e.target.value)}>
-                  <option value="">— no single control plane (inferred) —</option>
-                  {objs.map((o) => <option key={o.id} value={o.id}>{o.id}{o.kind !== 'orchestrator' ? ` (${o.kind})` : ''}</option>)}
+                  <option value="">— no single control plane (none in code) —</option>
+                  {/* An inferred orchestrator is synthetic — not a real control plane,
+                      so it's labeled, not offered as a clean choice. Real objects the
+                      operator could designate as the control plane are listed normally. */}
+                  {objs.map((o) => (
+                    <option key={o.id} value={o.id}>
+                      {o.id}{o.data?._inferred ? ' (inferred — not in code)' : (o.kind !== 'orchestrator' ? ` (${o.kind})` : '')}
+                    </option>
+                  ))}
                 </select>
               </label>
             </div>
