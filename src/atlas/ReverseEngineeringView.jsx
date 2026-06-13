@@ -20,6 +20,7 @@ import { scanRepo, mergeRecovered, registerScanner } from './reverse/scannerFram
 import { backendScanner } from './reverse/backendScanner';
 import { tsScanner } from './reverse/tsScanner';
 import { listDirStudio, isTauri } from './reverse/studioLister';
+import { censusRepo, coverageFinding } from './reverse/census';
 
 // Register the built-in scanner plugins once (DIAG-50). The backend Python/host
 // scanner (plugin #1, runtimes:['http']) and the studio-side TS/React UI scanner
@@ -184,6 +185,8 @@ export default function ReverseEngineeringView({ endpointUrl, onReviewText, onAd
     setErr(null); setReview(null); setResult(null); setBusy(true);
     let acc = null;
     const skipped = []; // repos that couldn't scan (no runtime yet, unreachable host)
+    const censuses = []; // [{repo, census}] — language census per repo (DIAG-59)
+    const scannedLangs = new Set(); // languages a scanner actually ran for
     try {
       for (const repo of repos) {
         // Each repo scans on ITS host. A repo whose (host, language) has no built
@@ -191,12 +194,24 @@ export default function ReverseEngineeringView({ endpointUrl, onReviewText, onAd
         // so a mixed estate (Python now, TS-on-Mac pending DIAG-51) still yields the
         // recoverable part instead of failing wholesale.
         const host = hostById(repo.host) || hostById(HOST_AXIOM);
+        const ctx = { endpointUrl, hostBaseUrl: host?.baseUrl || null, hostLabel: host?.label, hostScanKind: host?.browseKind || 'http' };
+        // Census the repo's language inventory REGARDLESS of whether the scan
+        // succeeds — so an unscannable/unsupported tier is still counted + reported
+        // loudly (no silent "fully covered"). Census failure is non-fatal.
+        try { censuses.push({ repo, census: await censusRepo(repo, ctx) }); }
+        catch (e) { censuses.push({ repo, census: { counts: {}, total: 0, truncated: false, unavailable: e?.message || String(e) } }); }
         try {
-          const recovered = await scanRepo(repo, { endpointUrl, hostBaseUrl: host?.baseUrl || null, hostLabel: host?.label, hostScanKind: host?.browseKind || 'http' });
+          const recovered = await scanRepo(repo, ctx);
           acc = mergeRecovered(acc, recovered, repo.label);
+          if (repo.language) scannedLangs.add(repo.language);
         } catch (e) {
           skipped.push(`${repo.label}: ${e?.message || e}`);
         }
+      }
+      // Append the estate-wide coverage finding to the recovered notes (DIAG-59).
+      if (acc && censuses.length) {
+        const cov = coverageFinding(censuses, scannedLangs);
+        acc = { ...acc, notes: [...(acc.notes || []), ...cov.notes], coverage: cov };
       }
       if (acc?.orchestratorId) setOrchId(acc.orchestratorId);
       setResult(acc);
@@ -386,6 +401,24 @@ export default function ReverseEngineeringView({ endpointUrl, onReviewText, onAd
 
       {result && (
         <div className="atlas-re-body">
+          {/* Coverage banner (DIAG-59): the no-false-"fully scanned" safety signal,
+              shown LOUDLY above the structural results. Unscanned languages here mean
+              whole tiers were not assessed. */}
+          {result.coverage && (
+            <div className={`atlas-re-coverage ${result.coverage.unscanned.length ? 'warn' : 'ok'}`}>
+              <div className="atlas-re-coverage-head">
+                <span className="atlas-re-coverage-pct">{result.coverage.pct}%</span>
+                <span>of code source scanned ({result.coverage.grandTotal} files across {result.coverage.covered.length + result.coverage.unscanned.length} detected language{(result.coverage.covered.length + result.coverage.unscanned.length) === 1 ? '' : 's'})</span>
+              </div>
+              {result.coverage.unscanned.length > 0 && (
+                <div className="atlas-re-coverage-gap">
+                  ⚠ <strong>Detected but NOT assessed</strong> (no scanner): {result.coverage.unscanned.map((u) => `${u.label} (${u.files})`).join(', ')}.
+                  These tiers are uncovered — a scanner is required before this is a complete assessment.
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Core-4 intake: facts only the operator knows. */}
           <div className="atlas-re-intake">
             <div className="atlas-re-coltitle">Tell Atlas what the code can’t — applies across the estate</div>

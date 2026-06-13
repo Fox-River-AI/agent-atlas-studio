@@ -87,6 +87,13 @@
 .atlas-re-rephost { background: var(--bg); color: var(--text); border: 1px solid var(--border-soft); border-radius: 5px; padding: 0.15rem 0.35rem; font-size: 0.78rem; }
 .atlas-re-addpath { display: flex; align-items: center; gap: 0.4rem; flex: 1; min-width: 20rem; }
 .atlas-re-addpath input { flex: 1; }
+/* coverage census banner (DIAG-59) */
+.atlas-re-coverage { border-radius: 7px; padding: 0.6rem 0.85rem; margin-bottom: 0.8rem; border: 1px solid var(--border-soft); }
+.atlas-re-coverage.ok { background: color-mix(in srgb, var(--good) 12%, var(--bg)); border-color: color-mix(in srgb, var(--good) 45%, var(--border-soft)); }
+.atlas-re-coverage.warn { background: color-mix(in srgb, var(--warn, #d98800) 14%, var(--bg)); border-color: color-mix(in srgb, var(--warn, #d98800) 55%, var(--border-soft)); }
+.atlas-re-coverage-head { display: flex; align-items: baseline; gap: 0.5rem; color: var(--text); font-size: 0.9rem; }
+.atlas-re-coverage-pct { font-size: 1.5rem; font-weight: 800; color: var(--text); }
+.atlas-re-coverage-gap { margin-top: 0.45rem; font-size: 0.83rem; color: var(--text); line-height: 1.45; }
 .atlas-re-browser-lang { font-size: 0.64rem; font-weight: 600; color: var(--text-muted); background: var(--bg); border-radius: 4px; padding: 0 0.3rem; margin-left: 0.3rem; }
 .atlas-re-repx { background: none; border: none; color: var(--text-dim); font-size: 1.1rem; cursor: pointer; line-height: 1; }
 .atlas-re-repx:hover { color: var(--bad); }

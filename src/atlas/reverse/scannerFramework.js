@@ -58,6 +58,14 @@ export function registeredScanners() {
   return _plugins.map((p) => ({ id: p.id, label: p.label, languages: p.languages }));
 }
 
+/** The set of languages SOME registered plugin can scan (any host). DIAG-59 uses
+ *  this to decide which detected languages are "covered" vs "unscanned". */
+export function scannableLanguages() {
+  const out = new Set();
+  for (const p of _plugins) for (const l of (p.languages || [])) out.add(l);
+  return out;
+}
+
 // ── The contract normalizer ───────────────────────────────────────────────────
 // Any plugin's raw output is run through the studio's normalizer (so a recovered
 // declaration is renderable/validatable exactly like a generated one), then shaped
