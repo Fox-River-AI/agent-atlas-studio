@@ -21,6 +21,7 @@ import { backendScanner } from './reverse/backendScanner';
 import { tsScanner } from './reverse/tsScanner';
 import { listDirStudio, isTauri } from './reverse/studioLister';
 import { censusRepo, coverageFinding } from './reverse/census';
+import { resolveCrossTier } from './reverse/crossTier';
 
 // Register the built-in scanner plugins once (DIAG-50). The backend Python/host
 // scanner (plugin #1, runtimes:['http']) and the studio-side TS/React UI scanner
@@ -208,6 +209,10 @@ export default function ReverseEngineeringView({ endpointUrl, onReviewText, onAd
           skipped.push(`${repo.label}: ${e?.message || e}`);
         }
       }
+      // Resolve cross-tier edges (DIAG-54): join the UI's service calls to the real
+      // recovered backend tiers (UI→gateway→stores, UI→core→stores) by route/role
+      // match + confidence; low-confidence joins are flagged, not asserted.
+      if (acc) acc = resolveCrossTier(acc, {});
       // Append the estate-wide coverage finding to the recovered notes (DIAG-59).
       if (acc && censuses.length) {
         const cov = coverageFinding(censuses, scannedLangs);
