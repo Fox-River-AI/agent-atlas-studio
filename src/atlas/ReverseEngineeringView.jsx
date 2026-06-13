@@ -18,11 +18,14 @@
 import React, { useState, useEffect } from 'react';
 import { scanRepo, mergeRecovered, registerScanner } from './reverse/scannerFramework';
 import { backendScanner } from './reverse/backendScanner';
+import { tsScanner } from './reverse/tsScanner';
 import { listDirStudio, isTauri } from './reverse/studioLister';
 
 // Register the built-in scanner plugins once (DIAG-50). The backend Python/host
-// scanner is plugin #1; future plugins (TS UI, SQL, Spark) register here too.
+// scanner (plugin #1, runtimes:['http']) and the studio-side TS/React UI scanner
+// (plugin #2, runtimes:['studio'], DIAG-51) register here; SQL/Spark plugins follow.
 registerScanner(backendScanner);
+registerScanner(tsScanner);
 
 // Languages the operator can tag a repo with → routes it to a scanner plugin (and
 // its runtime). Auto-detected on browse; overridable here. Extensible (DIAG-50).
