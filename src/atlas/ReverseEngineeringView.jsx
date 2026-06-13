@@ -45,33 +45,31 @@ export default function ReverseEngineeringView({ endpointUrl, onReviewText, onAd
   const [reviewBusy, setReviewBusy] = useState(false);
   const [review, setReview] = useState(null);
 
-  // The operator DECLARES which codebases comprise this system — the tool doesn't
-  // pre-know them. A repo is { label, path, preset? }. Presets are convenience
-  // shortcuts ("this deployment's known repos"), not the only way in.
-  const [repos, setRepos] = useState([]);        // the set to scan
-  const [presets, setPresets] = useState([]);    // optional example shortcuts (this deployment)
-  const [browseRoot, setBrowseRoot] = useState('');
-  const [pathInput, setPathInput] = useState(''); // free-text path being typed
-  // Host folder browser: navigate the SCANNER host's filesystem to pick repos.
+  // The operator DECLARES which codebases comprise the system — the tool pre-knows
+  // NONE (no presets; that would be deployment-specific). A repo is { label, path }.
+  // Discovery is purely: browse the workspace + type a path (+ git-URL clone later).
+  const [repos, setRepos] = useState([]);          // the set to scan
+  const [browseRoot, setBrowseRoot] = useState(''); // where the host browser starts
+  const [pathInput, setPathInput] = useState('');   // free-text path being typed
+  // Host folder browser: navigate the workspace filesystem to pick repo folders.
   const [browse, setBrowse] = useState(null); // { path, parent, entries } | null
   const [browseBusy, setBrowseBusy] = useState(false);
 
-  // Derive sibling endpoint URLs (presets/list-dir) from the generate URL. The scan
-  // URL itself is owned by the backend scanner plugin now.
+  // Derive sibling endpoint URLs (workspace/list-dir) from the generate URL. The
+  // scan URL itself is owned by the backend scanner plugin.
   const base = (suffix) => (endpointUrl ? endpointUrl.replace(/generate-model\/?$/, suffix) : '');
 
-  // Pull any known-repo shortcuts the backend offers (optional — the operator can
-  // always just type paths). These are convenience, not the source of truth.
+  // Learn where the host browser should start (the workspace root).
   useEffect(() => {
     if (!endpointUrl) return;
     let cancelled = false;
     (async () => {
       try {
-        const res = await fetch(base('scan-presets'));
+        const res = await fetch(base('scan-workspace'));
         if (!res.ok) return;
         const j = await res.json();
-        if (!cancelled) { setPresets(j.presets || []); setBrowseRoot(j.browseRoot || ''); }
-      } catch { /* shortcuts are optional */ }
+        if (!cancelled) setBrowseRoot(j.browseRoot || '');
+      } catch { /* optional */ }
     })();
     return () => { cancelled = true; };
   }, [endpointUrl]);
@@ -85,7 +83,7 @@ export default function ReverseEngineeringView({ endpointUrl, onReviewText, onAd
       if (!res.ok) { const t = await res.text().catch(() => ''); throw new Error(`Browse failed: ${res.status} ${t.slice(0, 120)}`); }
       setBrowse(await res.json());
     } catch (e) {
-      setErr(`Could not browse the scanner host. [${e?.message || e}]`);
+      setErr(`Could not browse the workspace. [${e?.message || e}]`);
     } finally { setBrowseBusy(false); }
   };
   const addBrowsedRepo = (entry) => {
@@ -93,7 +91,7 @@ export default function ReverseEngineeringView({ endpointUrl, onReviewText, onAd
   };
 
   const addRepo = (repo) => {
-    setRepos((rs) => rs.some((r) => (r.preset && r.preset === repo.preset) || r.path === repo.path) ? rs : [...rs, repo]);
+    setRepos((rs) => rs.some((r) => r.path === repo.path) ? rs : [...rs, repo]);
   };
   const removeRepo = (i) => setRepos((rs) => rs.filter((_, j) => j !== i));
   const addTypedPath = () => {
@@ -218,22 +216,18 @@ export default function ReverseEngineeringView({ endpointUrl, onReviewText, onAd
             {repos.map((r, i) => (
               <li key={i}>
                 <span className="atlas-re-replabel">{r.label}</span>
-                <code className="atlas-re-reppath">{r.preset ? `(preset) ${r.path}` : r.path}</code>
+                <code className="atlas-re-reppath">{r.path}</code>
                 <button className="atlas-re-repx" onClick={() => removeRepo(i)} title="Remove">×</button>
               </li>
             ))}
           </ul>
         )}
         <div className="atlas-re-repoadd">
-          <button className="atlas-re-browsebtn" onClick={() => openBrowse()} disabled={!endpointUrl} title="Browse the scanner host's filesystem to pick repo folders">🗀 Browse host…</button>
+          <button className="atlas-re-browsebtn" onClick={() => openBrowse()} disabled={!endpointUrl} title="Browse the workspace filesystem to pick repo folders">🗀 Browse workspace…</button>
           <input value={pathInput} onChange={(e) => setPathInput(e.target.value)}
             onKeyDown={(e) => { if (e.key === 'Enter') addTypedPath(); }}
-            placeholder="…or type a path on the scanner host" />
+            placeholder="…or type a repo path in the workspace" />
           <button onClick={addTypedPath} disabled={!pathInput.trim()}>+ Add path</button>
-          {presets.filter((p) => p.available && !repos.some((r) => r.preset === p.id)).map((p) => (
-            <button key={p.id} className="atlas-re-presetbtn" onClick={() => addRepo({ label: p.id, path: p.path, preset: p.id })}
-              title={`example shortcut · ${p.path}`}>+ {p.id} (example)</button>
-          ))}
         </div>
       </div>
 
@@ -242,7 +236,7 @@ export default function ReverseEngineeringView({ endpointUrl, onReviewText, onAd
         <div className="atlas-modal-backdrop" onClick={() => setBrowse(null)}>
           <div className="atlas-modal atlas-re-browser" onClick={(e) => e.stopPropagation()}>
             <div className="atlas-re-browser-head">
-              <h3>Scanner host — pick repo folders</h3>
+              <h3>Code workspace — pick repo folders</h3>
               <button className="atlas-re-browser-x" onClick={() => setBrowse(null)}>×</button>
             </div>
             <div className="atlas-re-browser-bar">
@@ -264,8 +258,9 @@ export default function ReverseEngineeringView({ endpointUrl, onReviewText, onAd
               ))}
             </div>
             <p className="atlas-re-browser-foot">
-              Browsing the <strong>scanner host</strong> ({browseRoot}). For code that lives in the cloud (AWS/Azure/GitHub),
-              clone it to this host first, then pick the clone here.
+              Browsing the <strong>code workspace</strong> ({browseRoot}). Reverse engineering analyzes source, not
+              live infra — clone/checkout all the repos that make up the system into the workspace (any language,
+              any origin: GitHub/CodeCommit/Azure DevOps), then pick the ones to scan.
             </p>
             <div className="atlas-modal-actions">
               <button onClick={() => setBrowse(null)}>Done</button>

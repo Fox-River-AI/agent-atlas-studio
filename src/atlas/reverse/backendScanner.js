@@ -19,7 +19,7 @@ export const backendScanner = {
   async scan(repo, ctx) {
     const { endpointUrl } = ctx;
     if (!endpointUrl) throw new Error('No scan endpoint configured. Set the model endpoint in Settings.');
-    const body = repo.preset ? { preset: repo.preset } : { root: repo.path };
+    const body = { root: repo.path };
     const res = await fetch(scanUrlFrom(endpointUrl), {
       method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body),
     });
