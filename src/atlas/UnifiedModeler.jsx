@@ -23,7 +23,8 @@ import { canConnect, connectionReason, parentKindsFor } from './relationships';
 import { namedIssues } from './validationMessages';
 import './atlas.css';
 import { SEED_OBJECTS, SEED_EDGES, SEED_EXPANDED, SEED_SUBJECT_AREAS, SEED_REQUIREMENTS } from './seedModel';
-import { loadModel, saveModel, clearModel, saveRecovery, loadRecovery, clearRecovery } from './persistence';
+import { loadModel, saveModel, clearModel, saveRecovery, loadRecovery, clearRecovery,
+  listDeclarations, saveDeclaration, loadDeclaration, deleteDeclaration } from './persistence';
 
 // The primary navigation. `ready` sections are live; the rest are the roadmap
 // (Monitoring / Reverse Engineering / Comparison) shown as tabs now so the nav
@@ -256,6 +257,48 @@ export default function UnifiedModeler() {
     setDraft(null);
     setPendingNew(null);
   }, []);
+
+  // ── Named declaration library (save/load multiple declarations) ──────────────
+  // The live model is a single auto-saved slot; this lets the user keep several
+  // declarations (demo, Noesis-current, Noesis-target…) and switch without losing
+  // work. Save snapshots the FULL state incl. layouts/viewports; Load restores it.
+  const [libOpen, setLibOpen] = useState(false);       // the library modal
+  const [libList, setLibList] = useState([]);          // [{slug,name,savedAt}]
+  const [saveName, setSaveName] = useState('');
+  const refreshLib = useCallback(async () => { setLibList(await listDeclarations()); }, []);
+
+  const doSaveDeclaration = useCallback(async (name) => {
+    const nm = (name || '').trim();
+    if (!nm) return;
+    const stamp = new Date().toISOString();
+    await saveDeclaration(nm, { objects, edges, expanded, subjectAreas, layouts, viewports, requirements }, stamp);
+    await refreshLib();
+    setSaveName('');
+    setExportMsg(`Saved declaration “${nm}”.`);
+  }, [objects, edges, expanded, subjectAreas, layouts, viewports, requirements, refreshLib]);
+
+  const doLoadDeclaration = useCallback(async (slug) => {
+    const m = await loadDeclaration(slug);
+    if (!m) { setExportMsg('Could not load that declaration.'); return; }
+    // snapshot current for one-step undo (same as generate/adopt), then restore FULL
+    setModelUndo({ objects, edges, expanded, subjectAreas, layouts, viewports });
+    setObjects(m.objects);
+    setEdges(m.edges);
+    setExpanded(m.expanded || {});
+    setSubjectAreas(m.subjectAreas || []);
+    setLayouts(m.layouts || {});
+    setViewports(m.viewports || {});
+    if (m.requirements !== undefined) setRequirements(m.requirements);
+    setCurrentSA(null); setSelectedId(null); setDraft(null); setPendingNew(null);
+    setLibOpen(false);
+    setSection('model');
+    setExportMsg('Declaration loaded.');
+  }, [objects, edges, expanded, subjectAreas, layouts, viewports]);
+
+  const doDeleteDeclaration = useCallback(async (slug) => {
+    await deleteDeclaration(slug);
+    await refreshLib();
+  }, [refreshLib]);
 
   // Seed the model FROM the requirements doc (DIAG-38). Doc → Model is a deliberate
   // SEED that OVERWRITES the current model — so snapshot it first for one-step undo,
@@ -900,6 +943,10 @@ export default function UnifiedModeler() {
                     onClick={() => { setActionsOpen(false); exportDataDictionary(); }}>Export governance dictionary</button>
                   <div className="atlas-menu-sep" />
                   <button role="menuitem"
+                    title="Save the current declaration under a name so you can switch between several without losing work"
+                    onClick={() => { setActionsOpen(false); setSaveName(''); refreshLib(); setLibOpen(true); }}>Save / load declarations…</button>
+                  <div className="atlas-menu-sep" />
+                  <button role="menuitem"
                     onClick={() => { setActionsOpen(false); setModal('reset'); }}
                     title="Discard saved changes and reload the demo model">Reset to demo</button>
                 </div>
@@ -1168,6 +1215,39 @@ export default function UnifiedModeler() {
             <div className="atlas-modal-actions">
               <button className="atlas-slider-reset" onClick={() => setModal(null)}>Cancel</button>
               <button onClick={() => { resetToDemo(); setModal(null); }}>Reset</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Named declaration library — save the current declaration + load/delete saved ones. */}
+      {libOpen && (
+        <div className="atlas-modal-backdrop" onClick={() => setLibOpen(false)}>
+          <div className="atlas-modal atlas-lib" onClick={(e) => e.stopPropagation()}>
+            <h2>Declarations</h2>
+            <p className="atlas-empty">
+              Save the current declaration under a name, or load a saved one. Loading replaces
+              the live model (one-step Undo available). The live model also auto-saves on its own.
+            </p>
+            <div className="atlas-lib-save">
+              <input value={saveName} onChange={(e) => setSaveName(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') doSaveDeclaration(saveName); }}
+                placeholder="Name this declaration (e.g. Noesis target, Causeway demo)…" />
+              <button disabled={!saveName.trim()} onClick={() => doSaveDeclaration(saveName)}>Save current</button>
+            </div>
+            <div className="atlas-lib-list">
+              {libList.length === 0 && <div className="atlas-empty">No saved declarations yet.</div>}
+              {libList.map((d) => (
+                <div key={d.slug} className="atlas-lib-row">
+                  <span className="atlas-lib-name">{d.name}</span>
+                  <span className="atlas-lib-when">{(d.savedAt || '').slice(0, 16).replace('T', ' ')}</span>
+                  <button onClick={() => doLoadDeclaration(d.slug)}>Load</button>
+                  <button className="atlas-lib-del" onClick={() => doDeleteDeclaration(d.slug)} title="Delete this saved declaration">✕</button>
+                </div>
+              ))}
+            </div>
+            <div className="atlas-modal-actions">
+              <button onClick={() => setLibOpen(false)}>Close</button>
             </div>
           </div>
         </div>
