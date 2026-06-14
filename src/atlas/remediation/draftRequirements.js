@@ -41,7 +41,7 @@ specialist can act with minimal downstream rework. On-prem inference only; no PH
   provider, never sends autonomously, never selects the high-weight answer.
 
 ## MAP (the components + data flow — NIST AI RMF "Map")
-Reuse every recovered component (listed under RECOVERED ESTATE below) and add the
+Reuse every recovered component (listed under RECOVERED ESTATE above) and add the
 net-new components a complete CDI product needs:
 - Workflow tasks under the orchestrator: Ingestion → Clinical-concept extraction →
   SNOMED/ICD mapping → Gap detection (DRG/CC-MCC + HCC) → Compliant-query drafting →
