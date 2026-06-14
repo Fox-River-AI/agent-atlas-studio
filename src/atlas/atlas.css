@@ -940,3 +940,5 @@
 .atlas-lib-when { font-size: 0.72rem; color: var(--text-muted); }
 .atlas-lib-row button { border: 1px solid var(--border-soft); background: var(--bg-elevated); color: var(--text); border-radius: 5px; padding: 0.25rem 0.6rem; font-size: 0.78rem; font-weight: 600; cursor: pointer; }
 .atlas-lib-del { color: var(--bad) !important; padding: 0.25rem 0.5rem !important; }
+.atlas-lib-confirm { display: inline-flex; gap: 0.3rem; }
+.atlas-lib-confirm .atlas-lib-del { background: var(--bad); color: #fff; border-color: var(--bad); }

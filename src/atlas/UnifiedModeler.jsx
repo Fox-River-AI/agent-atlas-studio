@@ -265,6 +265,7 @@ export default function UnifiedModeler() {
   const [libOpen, setLibOpen] = useState(false);       // the library modal
   const [libList, setLibList] = useState([]);          // [{slug,name,savedAt}]
   const [saveName, setSaveName] = useState('');
+  const [pendingDelete, setPendingDelete] = useState(null); // slug armed for delete-confirm
   const refreshLib = useCallback(async () => { setLibList(await listDeclarations()); }, []);
 
   const doSaveDeclaration = useCallback(async (name) => {
@@ -946,7 +947,7 @@ export default function UnifiedModeler() {
                   <div className="atlas-menu-sep" />
                   <button role="menuitem"
                     title="Save the current declaration under a name so you can switch between several without losing work"
-                    onClick={() => { setActionsOpen(false); setSaveName(''); refreshLib(); setLibOpen(true); }}>Save / load declarations…</button>
+                    onClick={() => { setActionsOpen(false); setSaveName(''); setPendingDelete(null); refreshLib(); setLibOpen(true); }}>Save / load declarations…</button>
                   <div className="atlas-menu-sep" />
                   <button role="menuitem"
                     onClick={() => { setActionsOpen(false); setModal('reset'); }}
@@ -1253,12 +1254,19 @@ export default function UnifiedModeler() {
                   <span className="atlas-lib-name">{d.name}</span>
                   <span className="atlas-lib-when">{(d.savedAt || '').slice(0, 16).replace('T', ' ')}</span>
                   <button onClick={() => doLoadDeclaration(d.slug, d.name)}>Load</button>
-                  <button className="atlas-lib-del" onClick={() => doDeleteDeclaration(d.slug)} title="Delete this saved declaration">✕</button>
+                  {pendingDelete === d.slug ? (
+                    <span className="atlas-lib-confirm">
+                      <button className="atlas-lib-del" onClick={() => { doDeleteDeclaration(d.slug); setPendingDelete(null); }} title="Confirm delete — permanent">Delete?</button>
+                      <button onClick={() => setPendingDelete(null)} title="Keep it">Cancel</button>
+                    </span>
+                  ) : (
+                    <button className="atlas-lib-del" onClick={() => setPendingDelete(d.slug)} title="Delete this saved declaration (asks to confirm)">✕</button>
+                  )}
                 </div>
               ))}
             </div>
             <div className="atlas-modal-actions">
-              <button onClick={() => setLibOpen(false)}>Close</button>
+              <button onClick={() => { setLibOpen(false); setPendingDelete(null); }}>Close</button>
             </div>
           </div>
         </div>
