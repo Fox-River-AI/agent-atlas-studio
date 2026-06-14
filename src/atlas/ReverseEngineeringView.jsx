@@ -712,19 +712,15 @@ export default function ReverseEngineeringView({ endpointUrl, onReviewText, onGe
   );
 }
 
-// The on-prem model name agents should pin to (for a no-PHI-egress system). If a
-// recovered local-LLM system names a model, use it; else the Noesis default. The
-// backend also infers this, but passing it explicitly is more reliable.
+// The on-prem model name agents should pin to (for a no-PHI-egress system), taken
+// from the RECOVERED inference system's `recoveredModel` (the scanner extracts whatever
+// model name the scanned code declares — vendor/domain-agnostic, NO hardcoded default).
+// Returns '' if the scan didn't recover one → generation leaves it as a declare-or-flag
+// gap rather than inventing a model. Atlas is generic: it pins the SCANNED system's
+// model, never a Noesis-specific value.
 function inferOnPremModel(objects) {
-  const sys = Object.values(objects || {}).find((o) => o.kind === 'system' &&
-    /ollama|on-prem|openai-compatible|llm-inference/i.test(`${o.id} ${o.data?.description || ''}`));
-  if (sys) {
-    // try to lift a model name from connection/description (e.g. "ollama: axiom-primary")
-    const m = `${sys.data?.connection || ''} ${sys.data?.description || ''}`.match(/\b(axiom-primary|qwen[\w.\-]*|llama[\w.\-]*|mistral[\w.\-]*)\b/i);
-    if (m) return m[1];
-    return 'axiom-primary';
-  }
-  return 'axiom-primary';
+  const sys = Object.values(objects || {}).find((o) => o.kind === 'system' && o.data?.recoveredModel);
+  return sys ? String(sys.data.recoveredModel) : '';
 }
 
 // Compact value formatter for the change list (arrays → joined, empty → ∅, truncate).
