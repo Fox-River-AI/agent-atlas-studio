@@ -1011,6 +1011,7 @@ export default function UnifiedModeler() {
         <ReverseEngineeringView
           endpointUrl={endpointUrl}
           onReviewText={(text) => httpEndpointProvider(endpointUrl).reviewRequirements(text)}
+          onGenerateTarget={(text, options) => httpEndpointProvider(endpointUrl).generateModel(text, options)}
           onAdopt={(model) => {
             // Load the recovered declaration into the Declaration tab to ratify +
             // govern it. Reuses the same apply+undo path as a generated declaration.

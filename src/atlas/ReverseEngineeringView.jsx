@@ -23,6 +23,10 @@ import { listDirStudio, isTauri } from './reverse/studioLister';
 import { censusRepo, coverageFinding } from './reverse/census';
 import { resolveCrossTier } from './reverse/crossTier';
 import { synthesizeTarget } from './remediation/synthesizeTarget';
+import { draftCdiRequirements } from './remediation/draftRequirements';
+import { reconcileAnchors } from './remediation/anchorReconcile';
+import { diffDeclarations } from './compare/declarationDiff';
+import { normalizeGeneratedModel } from './normalizeModel';
 
 // Register the built-in scanner plugins once (DIAG-50). The backend Python/host
 // scanner (plugin #1, runtimes:['http']) and the studio-side TS/React UI scanner
@@ -75,7 +79,7 @@ const RESIDENCY = [
 ];
 const REGIMES = ['HIPAA', 'SOC 2', 'GDPR', 'PCI-DSS', 'FedRAMP', 'EU AI Act', 'HITRUST', 'ISO 27001'];
 
-export default function ReverseEngineeringView({ endpointUrl, onReviewText, onAdopt }) {
+export default function ReverseEngineeringView({ endpointUrl, onReviewText, onGenerateTarget, onAdopt }) {
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState(null); // framework estate: { objects, edges, notes, scannedRepos, orchestratorId }
   const [err, setErr] = useState(null);
@@ -91,6 +95,12 @@ export default function ReverseEngineeringView({ endpointUrl, onReviewText, onAd
   const [review, setReview] = useState(null);
   // Remediation: the synthesized optimal target { target, changes, notes }.
   const [target, setTarget] = useState(null);
+  // Requirements-driven target generation (the LLM path).
+  const [reqDraft, setReqDraft] = useState('');
+  const [genBusy, setGenBusy] = useState(false);
+  const [llmTarget, setLlmTarget] = useState(null); // { objects, edges, subjectAreas }
+  const [llmDiff, setLlmDiff] = useState(null);     // diffDeclarations(recovered, target)
+  const [llmNotes, setLlmNotes] = useState([]);     // reconciliation + generation notes
 
   // The operator DECLARES which codebases comprise the system — the tool pre-knows
   // NONE (no presets; that would be deployment-specific). A repo is { label, path }.
@@ -241,7 +251,7 @@ export default function ReverseEngineeringView({ endpointUrl, onReviewText, onAd
     } finally { setBusy(false); }
   };
 
-  const clearScan = () => { setResult(null); setReview(null); setTarget(null); };
+  const clearScan = () => { setResult(null); setReview(null); setTarget(null); setReqDraft(''); setLlmTarget(null); setLlmDiff(null); setLlmNotes([]); };
 
   // result is now the framework's merged estate: { objects, edges, notes, scannedRepos, orchestratorId }.
   const objs = result ? Object.values(result.objects) : [];
@@ -330,6 +340,41 @@ export default function ReverseEngineeringView({ endpointUrl, onReviewText, onAd
     }
   };
   const adoptTarget = () => { if (onAdopt && target) onAdopt(target.target); };
+
+  // ── Requirements-driven target generation (the LLM path) ──────────────────────
+  // Draft a CDI requirements doc from the recovered estate + intake, let the operator
+  // edit it, then send it to the LLM generator WITH the recovered inventory + anchoring
+  // instructions. The returned target is reconciled (LLM-minted ids → recovered ids)
+  // and diffed against the recovered estate so the change set is truthful.
+  const draftReq = () => {
+    if (!result) return;
+    setReqDraft(draftCdiRequirements(result, { sysName, residency, regimes }));
+  };
+  const generateTarget = async () => {
+    if (!onGenerateTarget || !result) return;
+    const text = reqDraft.trim();
+    if (!text) { setErr('Draft or write the requirements first.'); return; }
+    setErr(null); setLlmTarget(null); setLlmDiff(null); setLlmNotes([]); setGenBusy(true);
+    try {
+      // Slim recovered inventory (id/kind/parent/one-liner) — keeps the prompt small.
+      const slim = Object.values(result.objects).map((o) => ({
+        id: o.id, kind: o.kind, parent: o.parent || null,
+        responsibility: o.data?.responsibility || o.data?.description || '',
+      }));
+      const options = { recovered: { objects: slim }, anchor: true, intake: { sysName, residency, regimes } };
+      const { model, notes } = await onGenerateTarget(text, options);
+      // Normalize to the canonical shape (same path generated declarations take).
+      const { model: norm, problems } = normalizeGeneratedModel(model && model.objects ? model : (model?.model || model || {}));
+      const recoveredDecl = { objects: result.objects, edges: result.edges || [] };
+      const { target: anchored, notes: anchorNotes } = reconcileAnchors(recoveredDecl, { objects: norm.objects, edges: norm.edges, subjectAreas: norm.subjectAreas });
+      setLlmTarget(anchored);
+      setLlmDiff(diffDeclarations(recoveredDecl, anchored));
+      setLlmNotes([...(notes || []), ...anchorNotes, ...problems]);
+    } catch (e) {
+      setErr(`Target generation failed. [${e?.message || e}]`);
+    } finally { setGenBusy(false); }
+  };
+  const adoptLlmTarget = () => { if (onAdopt && llmTarget) onAdopt(llmTarget); };
 
   const counts = result ? { agents: byKind('agent').length, tools: byKind('tool').length, systems: byKind('system').length } : null;
 
@@ -599,6 +644,49 @@ export default function ReverseEngineeringView({ endpointUrl, onReviewText, onAd
                         <div className="atlas-re-targetactions">
                           {onAdopt && <button className="atlas-re-adopt" onClick={adoptTarget} title="Load the OPTIMAL TARGET into the Declaration tab — governance filled, control plane proposed, ready to validate + export the build bundle">Adopt target as declaration →</button>}
                           <span className="atlas-re-targethint">Adopt → Declaration tab → resolve any «confirm» placeholders → Export build bundle. Or load the recovered + target in Compare to see the diff.</span>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Requirements-driven target generation (the LLM path) — the FULL
+                      future state (new CDI agents/tasks, MIMIC/EDI ingest, a real
+                      orchestrator), anchored to the recovered ids. */}
+                  <div className="atlas-re-reqgen">
+                    <div className="atlas-re-reqgenhd">
+                      Or generate the <strong>full target</strong> from requirements
+                      <span className="atlas-re-reqgensub"> — the deterministic button above only governs what exists; this designs the complete CDI product.</span>
+                    </div>
+                    <div className="atlas-re-reqgenbar">
+                      <button onClick={draftReq} disabled={!result} title="Draft a CDI requirements doc (NIST AI RMF) from the recovered estate — then edit it">📝 Draft requirements</button>
+                      <button className="atlas-re-synthbtn" onClick={generateTarget} disabled={genBusy || !reqDraft.trim() || !onGenerateTarget}>
+                        {genBusy ? 'Generating (Opus)…' : '⚙ Generate optimal target →'}
+                      </button>
+                    </div>
+                    {reqDraft && (
+                      <textarea className="atlas-re-reqtext" value={reqDraft} onChange={(e) => setReqDraft(e.target.value)}
+                        spellCheck={false} placeholder="CDI requirements (edit before generating)…" />
+                    )}
+                    {llmDiff && (
+                      <div className="atlas-re-target">
+                        <div className="atlas-re-targethd">
+                          Generated target — <strong>{llmDiff.summary.actionable}</strong> change(s) vs current ·
+                          {' '}{llmDiff.summary.unbuilt} new · {llmDiff.summary.drifted} changed · {llmDiff.summary.moved} re-parented · {llmDiff.summary.shadow} dropped · {llmDiff.summary.aligned} unchanged
+                        </div>
+                        <ul className="atlas-re-changelist">
+                          {llmDiff.categories.unbuilt.map((r, i) => <li key={`u${i}`}><span className="atlas-re-src src-atlas">NEW</span><code>{r.id}</code> ({r.kind})</li>)}
+                          {llmDiff.categories.drifted.map((r, i) => <li key={`d${i}`}><span className="atlas-re-src src-intake">CHANGED</span><code>{r.id}</code>: {r.fields.map((f) => f.field).join(', ')}</li>)}
+                          {llmDiff.categories.moved.map((r, i) => <li key={`m${i}`}><span className="atlas-re-src src-intake">MOVED</span><code>{r.id}</code>: {r.fromParent} → {r.toParent}</li>)}
+                          {llmDiff.categories.shadow.map((r, i) => <li key={`s${i}`} className="proposed"><span className="atlas-re-src src-atlas">DROPPED</span><code>{r.id}</code> ({r.kind}) — in current, not in target</li>)}
+                        </ul>
+                        {llmNotes.length > 0 && (
+                          <ul className="atlas-re-notelist atlas-re-gennotes">
+                            {llmNotes.slice(0, 8).map((n, i) => <li key={i}>{n}</li>)}
+                          </ul>
+                        )}
+                        <div className="atlas-re-targetactions">
+                          {onAdopt && <button className="atlas-re-adopt" onClick={adoptLlmTarget} title="Load the generated target into the Declaration tab to validate + export the build bundle">Adopt generated target →</button>}
+                          <span className="atlas-re-targethint">Adopt → Declaration tab → resolve issues → Export build bundle. The diff above is your change set (current → target).</span>
                         </div>
                       </div>
                     )}
