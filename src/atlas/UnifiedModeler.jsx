@@ -277,7 +277,7 @@ export default function UnifiedModeler() {
     setExportMsg(`Saved declaration “${nm}”.`);
   }, [objects, edges, expanded, subjectAreas, layouts, viewports, requirements, refreshLib]);
 
-  const doLoadDeclaration = useCallback(async (slug) => {
+  const doLoadDeclaration = useCallback(async (slug, displayName) => {
     const m = await loadDeclaration(slug);
     if (!m) { setExportMsg('Could not load that declaration.'); return; }
     // snapshot current for one-step undo (same as generate/adopt), then restore FULL
@@ -288,7 +288,9 @@ export default function UnifiedModeler() {
     setSubjectAreas(m.subjectAreas || []);
     setLayouts(m.layouts || {});
     setViewports(m.viewports || {});
-    if (m.requirements !== undefined) setRequirements(m.requirements);
+    // Project name = the saved declaration's name (so the header matches what's
+    // loaded), preserving the saved requirements TEXT if any.
+    setRequirements((r) => ({ ...(m.requirements || r || {}), name: displayName || (m.requirements && m.requirements.name) || (r && r.name) || 'Untitled' }));
     setCurrentSA(null); setSelectedId(null); setDraft(null); setPendingNew(null);
     setLibOpen(false);
     setSection('model');
@@ -1064,6 +1066,15 @@ export default function UnifiedModeler() {
             // govern it. Reuses the same apply+undo path as a generated declaration.
             setModelUndo({ objects, edges, expanded, subjectAreas, layouts, viewports });
             applyGeneratedModel(model);
+            // Update the project name so the header reflects the adopted declaration,
+            // not the stale (Causeway) requirements name. Prefer the system name from
+            // the orchestrator's description, else its id.
+            const orch = Object.values(model.objects || {}).find((o) => o.kind === 'orchestrator');
+            if (orch) {
+              const fromDesc = (orch.data?.description || '').split('—')[0].trim();
+              const nm = fromDesc && fromDesc.length <= 60 ? fromDesc : orch.id;
+              if (nm) setRequirements((r) => ({ ...(r || {}), name: nm }));
+            }
             setSection('model');
           }}
         />
@@ -1241,7 +1252,7 @@ export default function UnifiedModeler() {
                 <div key={d.slug} className="atlas-lib-row">
                   <span className="atlas-lib-name">{d.name}</span>
                   <span className="atlas-lib-when">{(d.savedAt || '').slice(0, 16).replace('T', ' ')}</span>
-                  <button onClick={() => doLoadDeclaration(d.slug)}>Load</button>
+                  <button onClick={() => doLoadDeclaration(d.slug, d.name)}>Load</button>
                   <button className="atlas-lib-del" onClick={() => doDeleteDeclaration(d.slug)} title="Delete this saved declaration">✕</button>
                 </div>
               ))}
