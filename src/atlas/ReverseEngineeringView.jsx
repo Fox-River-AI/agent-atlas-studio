@@ -361,7 +361,11 @@ export default function ReverseEngineeringView({ endpointUrl, onReviewText, onGe
         id: o.id, kind: o.kind, parent: o.parent || null,
         responsibility: o.data?.responsibility || o.data?.description || '',
       }));
-      const options = { recovered: { objects: slim }, anchor: true, intake: { sysName, residency, regimes } };
+      // Pass the real on-prem model name so generated agents pin to it (not a cloud
+      // model) for an on-prem/no-egress system. Derive from the recovered llm-inference
+      // system's description if it names one; else the Noesis default.
+      const onPremModel = inferOnPremModel(result.objects);
+      const options = { recovered: { objects: slim }, anchor: true, intake: { sysName, residency, regimes, onPremModel } };
       const { model, notes } = await onGenerateTarget(text, options);
       // Normalize to the canonical shape (same path generated declarations take).
       const { model: norm, problems } = normalizeGeneratedModel(model && model.objects ? model : (model?.model || model || {}));
@@ -706,6 +710,21 @@ export default function ReverseEngineeringView({ endpointUrl, onReviewText, onGe
       )}
     </div>
   );
+}
+
+// The on-prem model name agents should pin to (for a no-PHI-egress system). If a
+// recovered local-LLM system names a model, use it; else the Noesis default. The
+// backend also infers this, but passing it explicitly is more reliable.
+function inferOnPremModel(objects) {
+  const sys = Object.values(objects || {}).find((o) => o.kind === 'system' &&
+    /ollama|on-prem|openai-compatible|llm-inference/i.test(`${o.id} ${o.data?.description || ''}`));
+  if (sys) {
+    // try to lift a model name from connection/description (e.g. "ollama: axiom-primary")
+    const m = `${sys.data?.connection || ''} ${sys.data?.description || ''}`.match(/\b(axiom-primary|qwen[\w.\-]*|llama[\w.\-]*|mistral[\w.\-]*)\b/i);
+    if (m) return m[1];
+    return 'axiom-primary';
+  }
+  return 'axiom-primary';
 }
 
 // Compact value formatter for the change list (arrays → joined, empty → ∅, truncate).
