@@ -266,7 +266,21 @@ export default function UnifiedModeler() {
   const [libList, setLibList] = useState([]);          // [{slug,name,savedAt}]
   const [saveName, setSaveName] = useState('');
   const [pendingDelete, setPendingDelete] = useState(null); // slug armed for delete-confirm
+  // Baseline fingerprint of the model as of the last named save / load-from-library.
+  // If the live model differs from this, there are changes NOT captured in the named
+  // library — Load / Reset warn before replacing. null = no named baseline yet (e.g.
+  // an adopted target or the seed that was never saved → treated as dirty-if-nonempty).
+  const [declBaseline, setDeclBaseline] = useState(null);
+  // A switch we're holding behind the unsaved-changes prompt: { kind:'load'|'reset', slug?, name? }
+  const [switchReq, setSwitchReq] = useState(null);
   const refreshLib = useCallback(async () => { setLibList(await listDeclarations()); }, []);
+  const declFingerprint = useCallback(() => JSON.stringify({ objects, edges, subjectAreas }), [objects, edges, subjectAreas]);
+  // "Dirty vs library" = the current declaration has content AND differs from (or has
+  // no) named baseline. A brand-new/empty model isn't worth guarding.
+  const declarationDirty = (() => {
+    if (!objects || Object.keys(objects).length <= 1) return false; // empty/orchestrator-only
+    return declBaseline === null || declFingerprint() !== declBaseline;
+  })();
 
   const doSaveDeclaration = useCallback(async (name) => {
     const nm = (name || '').trim();
@@ -275,6 +289,7 @@ export default function UnifiedModeler() {
     await saveDeclaration(nm, { objects, edges, expanded, subjectAreas, layouts, viewports, requirements }, stamp);
     await refreshLib();
     setSaveName('');
+    setDeclBaseline(declFingerprint()); // current model is now captured in the library
     setExportMsg(`Saved declaration “${nm}”.`);
   }, [objects, edges, expanded, subjectAreas, layouts, viewports, requirements, refreshLib]);
 
@@ -293,6 +308,8 @@ export default function UnifiedModeler() {
     // loaded), preserving the saved requirements TEXT if any.
     setRequirements((r) => ({ ...(m.requirements || r || {}), name: displayName || (m.requirements && m.requirements.name) || (r && r.name) || 'Untitled' }));
     setCurrentSA(null); setSelectedId(null); setDraft(null); setPendingNew(null);
+    // The just-loaded model IS the named baseline now (loaded clean from the library).
+    setDeclBaseline(JSON.stringify({ objects: m.objects, edges: m.edges || [], subjectAreas: m.subjectAreas || [] }));
     setLibOpen(false);
     setSection('model');
     setExportMsg('Declaration loaded.');
@@ -302,6 +319,24 @@ export default function UnifiedModeler() {
     await deleteDeclaration(slug);
     await refreshLib();
   }, [refreshLib]);
+
+  // Guarded entry points: if the current declaration has changes not captured in the
+  // named library, hold the switch behind a Save-as / Discard / Cancel prompt.
+  const requestLoad = useCallback((slug, name) => {
+    if (declarationDirty) setSwitchReq({ kind: 'load', slug, name });
+    else doLoadDeclaration(slug, name);
+  }, [declarationDirty, doLoadDeclaration]);
+  const requestReset = useCallback(() => {
+    if (declarationDirty) setSwitchReq({ kind: 'reset' });
+    else setModal('reset');
+  }, [declarationDirty]);
+  // Proceed with the held switch after the user chose Discard (or after Save-as).
+  const proceedSwitch = useCallback(() => {
+    const req = switchReq; setSwitchReq(null);
+    if (!req) return;
+    if (req.kind === 'load') doLoadDeclaration(req.slug, req.name);
+    else if (req.kind === 'reset') setModal('reset');
+  }, [switchReq, doLoadDeclaration]);
 
   // Seed the model FROM the requirements doc (DIAG-38). Doc → Model is a deliberate
   // SEED that OVERWRITES the current model — so snapshot it first for one-step undo,
@@ -950,7 +985,7 @@ export default function UnifiedModeler() {
                     onClick={() => { setActionsOpen(false); setSaveName(''); setPendingDelete(null); refreshLib(); setLibOpen(true); }}>Save / load declarations…</button>
                   <div className="atlas-menu-sep" />
                   <button role="menuitem"
-                    onClick={() => { setActionsOpen(false); setModal('reset'); }}
+                    onClick={() => { setActionsOpen(false); requestReset(); }}
                     title="Discard saved changes and reload the demo model">Reset to demo</button>
                 </div>
               </>
@@ -1253,7 +1288,7 @@ export default function UnifiedModeler() {
                 <div key={d.slug} className="atlas-lib-row">
                   <span className="atlas-lib-name">{d.name}</span>
                   <span className="atlas-lib-when">{(d.savedAt || '').slice(0, 16).replace('T', ' ')}</span>
-                  <button onClick={() => doLoadDeclaration(d.slug, d.name)}>Load</button>
+                  <button onClick={() => requestLoad(d.slug, d.name)}>Load</button>
                   {pendingDelete === d.slug ? (
                     <span className="atlas-lib-confirm">
                       <button className="atlas-lib-del" onClick={() => { doDeleteDeclaration(d.slug); setPendingDelete(null); }} title="Confirm delete — permanent">Delete?</button>
@@ -1267,6 +1302,31 @@ export default function UnifiedModeler() {
             </div>
             <div className="atlas-modal-actions">
               <button onClick={() => { setLibOpen(false); setPendingDelete(null); }}>Close</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Unsaved-changes guard before Load / Reset replaces the live declaration. */}
+      {switchReq && (
+        <div className="atlas-modal-backdrop" onClick={() => setSwitchReq(null)}>
+          <div className="atlas-modal" onClick={(e) => e.stopPropagation()}>
+            <h2>Save current declaration first?</h2>
+            <p className="atlas-empty">
+              The current declaration has changes that aren’t saved in the library.
+              {switchReq.kind === 'load'
+                ? ` Loading “${switchReq.name}” will replace it.`
+                : ' Resetting to the demo will replace it.'}
+            </p>
+            <div className="atlas-switch-save">
+              <input value={saveName} onChange={(e) => setSaveName(e.target.value)}
+                placeholder="Name to save the current one as…"
+                onKeyDown={(e) => { if (e.key === 'Enter' && saveName.trim()) { doSaveDeclaration(saveName).then(proceedSwitch); } }} />
+              <button disabled={!saveName.trim()} onClick={() => doSaveDeclaration(saveName).then(proceedSwitch)}>Save &amp; continue</button>
+            </div>
+            <div className="atlas-modal-actions">
+              <button className="atlas-slider-reset" onClick={() => setSwitchReq(null)}>Cancel</button>
+              <button onClick={proceedSwitch} title="Continue without saving the current declaration">Discard &amp; continue</button>
             </div>
           </div>
         </div>

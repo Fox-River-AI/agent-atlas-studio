@@ -942,3 +942,7 @@
 .atlas-lib-del { color: var(--bad) !important; padding: 0.25rem 0.5rem !important; }
 .atlas-lib-confirm { display: inline-flex; gap: 0.3rem; }
 .atlas-lib-confirm .atlas-lib-del { background: var(--bad); color: #fff; border-color: var(--bad); }
+.atlas-switch-save { display: flex; gap: 0.5rem; margin: 0.6rem 0 0.9rem; }
+.atlas-switch-save input { flex: 1; background: var(--bg); color: var(--text); border: 1px solid var(--border-soft); border-radius: 5px; padding: 0.45rem 0.6rem; font-size: 0.85rem; }
+.atlas-switch-save button { border: 1px solid var(--accent); background: var(--accent); color: #fff; border-radius: 5px; padding: 0.45rem 0.8rem; font-weight: 700; font-size: 0.82rem; cursor: pointer; }
+.atlas-switch-save button:disabled { opacity: 0.45; cursor: default; }
