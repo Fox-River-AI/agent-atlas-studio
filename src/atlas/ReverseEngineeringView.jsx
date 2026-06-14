@@ -22,6 +22,7 @@ import { tsScanner } from './reverse/tsScanner';
 import { listDirStudio, isTauri } from './reverse/studioLister';
 import { censusRepo, coverageFinding } from './reverse/census';
 import { resolveCrossTier } from './reverse/crossTier';
+import { synthesizeTarget } from './remediation/synthesizeTarget';
 
 // Register the built-in scanner plugins once (DIAG-50). The backend Python/host
 // scanner (plugin #1, runtimes:['http']) and the studio-side TS/React UI scanner
@@ -88,6 +89,8 @@ export default function ReverseEngineeringView({ endpointUrl, onReviewText, onAd
   // R2 review state.
   const [reviewBusy, setReviewBusy] = useState(false);
   const [review, setReview] = useState(null);
+  // Remediation: the synthesized optimal target { target, changes, notes }.
+  const [target, setTarget] = useState(null);
 
   // The operator DECLARES which codebases comprise the system — the tool pre-knows
   // NONE (no presets; that would be deployment-specific). A repo is { label, path }.
@@ -238,7 +241,7 @@ export default function ReverseEngineeringView({ endpointUrl, onReviewText, onAd
     } finally { setBusy(false); }
   };
 
-  const clearScan = () => { setResult(null); setReview(null); };
+  const clearScan = () => { setResult(null); setReview(null); setTarget(null); };
 
   // result is now the framework's merged estate: { objects, edges, notes, scannedRepos, orchestratorId }.
   const objs = result ? Object.values(result.objects) : [];
@@ -298,7 +301,7 @@ export default function ReverseEngineeringView({ endpointUrl, onReviewText, onAd
 
   const runReview = async () => {
     if (!onReviewText || !result) return;
-    setErr(null); setReview(null); setReviewBusy(true);
+    setErr(null); setReview(null); setTarget(null); setReviewBusy(true);
     try {
       const enriched = applyIntake(result);
       const r = await onReviewText(synthDescription(enriched));
@@ -309,6 +312,24 @@ export default function ReverseEngineeringView({ endpointUrl, onReviewText, onAd
   };
 
   const adopt = () => { if (onAdopt && result) onAdopt(applyIntake(result)); };
+
+  // ── Target synthesis (Remediation) ────────────────────────────────────────────
+  // Build the OPTIMAL target from the recovered estate + intake + the governance
+  // review, deterministically (synthesizeTarget). Requires a review first (it supplies
+  // the per-agent/per-system suggested values). The target is anchored to recovered
+  // ids → adopt it, or Compare it against the recovered estate to see the change set.
+  const synthesize = () => {
+    if (!result) return;
+    if (!review) { setErr('Run “Review for governance gaps” first — the target is built from its suggestions.'); return; }
+    setErr(null);
+    try {
+      const out = synthesizeTarget(result, { sysName, residency, regimes, orchId }, review);
+      setTarget(out);
+    } catch (e) {
+      setErr(`Could not synthesize the target. [${e?.message || e}]`);
+    }
+  };
+  const adoptTarget = () => { if (onAdopt && target) onAdopt(target.target); };
 
   const counts = result ? { agents: byKind('agent').length, tools: byKind('tool').length, systems: byKind('system').length } : null;
 
@@ -552,9 +573,36 @@ export default function ReverseEngineeringView({ endpointUrl, onReviewText, onAd
                     ))}
                   </ul>
                   <p className="atlas-re-foot">
-                    These are the declarations to add to govern the recovered code. Adopt the estate into the
-                    Declaration tab, then fill them in — the same loop the Requirements front door uses, in reverse.
+                    These are the declarations to add to govern the recovered code. Synthesize them into an
+                    optimal target below — or adopt the estate and fill them by hand.
                   </p>
+
+                  {/* Remediation: synthesize the optimal target from these suggestions. */}
+                  <div className="atlas-re-synth">
+                    <button className="atlas-re-synthbtn" onClick={synthesize} disabled={!review}>
+                      ⚙ Synthesize optimal target →
+                    </button>
+                    {target && (
+                      <div className="atlas-re-target">
+                        <div className="atlas-re-targethd">
+                          Optimal target — <strong>{target.changes.length}</strong> change(s) anchored to the recovered estate
+                          {target.changes.some((c) => c.proposed) && <span className="atlas-re-proposedtag"> · {target.changes.filter((c) => c.proposed).length} structural (ratify)</span>}
+                        </div>
+                        <ul className="atlas-re-changelist">
+                          {target.changes.map((c, i) => (
+                            <li key={i} className={c.proposed ? 'proposed' : ''}>
+                              <span className={`atlas-re-src src-${c.source.toLowerCase()}`}>{c.source}{c.proposed ? '·PROPOSED' : ''}</span>
+                              <code>{c.id}</code>.{c.field}: <em>{fmtv(c.from)}</em> → <strong>{fmtv(c.to)}</strong>
+                            </li>
+                          ))}
+                        </ul>
+                        <div className="atlas-re-targetactions">
+                          {onAdopt && <button className="atlas-re-adopt" onClick={adoptTarget} title="Load the OPTIMAL TARGET into the Declaration tab — governance filled, control plane proposed, ready to validate + export the build bundle">Adopt target as declaration →</button>}
+                          <span className="atlas-re-targethint">Adopt → Declaration tab → resolve any «confirm» placeholders → Export build bundle. Or load the recovered + target in Compare to see the diff.</span>
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 </>
               )}
             </div>
@@ -570,4 +618,10 @@ export default function ReverseEngineeringView({ endpointUrl, onReviewText, onAd
       )}
     </div>
   );
+}
+
+// Compact value formatter for the change list (arrays → joined, empty → ∅, truncate).
+function fmtv(v) {
+  const s = Array.isArray(v) ? (v.length ? v.join(', ') : '∅') : (v == null || v === '' ? '∅' : String(v));
+  return s.length > 48 ? s.slice(0, 46) + '…' : s;
 }

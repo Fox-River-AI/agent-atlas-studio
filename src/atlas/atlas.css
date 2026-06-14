@@ -899,3 +899,20 @@
 .atlas-re-noctrl { border: 1px solid color-mix(in srgb, var(--warn, #d98800) 55%, var(--border-soft)); background: color-mix(in srgb, var(--warn, #d98800) 12%, var(--bg)); border-radius: 6px; padding: 0.55rem 0.8rem; margin-bottom: 0.7rem; font-size: 0.82rem; color: var(--text); line-height: 1.5; }
 .atlas-re-noctrl code { background: var(--bg-elevated); padding: 0 0.25rem; border-radius: 3px; }
 .atlas-re-baseline-tag { display: inline-block; font-size: 0.66rem; font-weight: 800; letter-spacing: 0.04em; text-transform: uppercase; color: var(--accent); border: 1px solid var(--accent); border-radius: 4px; padding: 0 0.3rem; }
+
+/* RE: target synthesis (Remediation) */
+.atlas-re-synth { margin-top: 0.8rem; }
+.atlas-re-synthbtn { background: var(--accent); color: #fff; border: none; border-radius: 6px; padding: 0.5rem 0.9rem; font-size: 0.86rem; font-weight: 700; cursor: pointer; }
+.atlas-re-synthbtn:disabled { opacity: 0.45; cursor: default; }
+.atlas-re-target { margin-top: 0.8rem; border: 1px solid var(--border-soft); border-radius: 7px; overflow: hidden; }
+.atlas-re-targethd { background: var(--bg-elevated); padding: 0.5rem 0.8rem; font-size: 0.85rem; color: var(--text); }
+.atlas-re-proposedtag { color: var(--warn, #d98800); font-weight: 700; }
+.atlas-re-changelist { margin: 0; padding: 0.5rem 0.8rem 0.6rem 0.9rem; list-style: none; font-size: 0.78rem; color: var(--text); line-height: 1.6; max-height: 22rem; overflow-y: auto; }
+.atlas-re-changelist li { padding: 0.1rem 0; border-bottom: 1px solid color-mix(in srgb, var(--border-soft) 40%, transparent); }
+.atlas-re-changelist li.proposed { background: color-mix(in srgb, var(--warn, #d98800) 8%, transparent); }
+.atlas-re-changelist code { background: var(--bg-elevated); padding: 0 0.25rem; border-radius: 3px; }
+.atlas-re-src { display: inline-block; font-size: 0.62rem; font-weight: 800; letter-spacing: 0.03em; border-radius: 4px; padding: 0 0.3rem; margin-right: 0.4rem; }
+.atlas-re-src.src-atlas { color: var(--accent); border: 1px solid var(--accent); }
+.atlas-re-src.src-intake { color: var(--good); border: 1px solid var(--good); }
+.atlas-re-targetactions { padding: 0.5rem 0.8rem 0.7rem; display: flex; flex-direction: column; gap: 0.4rem; }
+.atlas-re-targethint { font-size: 0.74rem; color: var(--text-muted); line-height: 1.4; }
