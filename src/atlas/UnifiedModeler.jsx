@@ -1082,19 +1082,12 @@ export default function UnifiedModeler() {
       )}
 
       <div className="atlas-body">
-       {section === 'requirements' ? (
-        <RequirementsView
-          requirements={requirements}
-          onCreate={createRequirements}
-          onChangeText={setRequirementsText}
-          onImport={importRequirements}
-          onGenerate={generateFromRequirements}
-          onReview={reviewRequirements}
-          endpointConfigured={!!endpointUrl}
-        />
-       ) : section === 'monitoring' ? (
-        <MonitoringView />
-       ) : section === 'reverse' ? (
+       {/* Reverse Eng is ALWAYS mounted (hidden via CSS when inactive) so its scan /
+           generated-target / change-set state survives tab switches — flipping to the
+           Declaration tab to Save/Export and back must NOT discard a (paid) generated
+           target. Keeping it mounted preserves the component's own state with no
+           internal-state refactor. */}
+       <div style={{ display: section === 'reverse' ? 'contents' : 'none' }}>
         <ReverseEngineeringView
           endpointUrl={endpointUrl}
           onReviewText={(text) => httpEndpointProvider(endpointUrl).reviewRequirements(text)}
@@ -1116,9 +1109,22 @@ export default function UnifiedModeler() {
             setSection('model');
           }}
         />
+       </div>
+       {section === 'requirements' ? (
+        <RequirementsView
+          requirements={requirements}
+          onCreate={createRequirements}
+          onChangeText={setRequirementsText}
+          onImport={importRequirements}
+          onGenerate={generateFromRequirements}
+          onReview={reviewRequirements}
+          endpointConfigured={!!endpointUrl}
+        />
+       ) : section === 'monitoring' ? (
+        <MonitoringView />
        ) : section === 'compare' ? (
         <CompareView liveModel={{ objects, edges }} />
-       ) : section !== 'model' ? (
+       ) : (section !== 'model' && section !== 'reverse') ? (
         (() => {
           const s = SECTIONS.find((x) => x.id === section);
           return (
