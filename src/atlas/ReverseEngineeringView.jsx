@@ -22,7 +22,6 @@ import { tsScanner } from './reverse/tsScanner';
 import { listDirStudio, isTauri } from './reverse/studioLister';
 import { censusRepo, coverageFinding } from './reverse/census';
 import { resolveCrossTier } from './reverse/crossTier';
-import { synthesizeTarget } from './remediation/synthesizeTarget';
 import { draftCdiRequirements } from './remediation/draftRequirements';
 import { reconcileAnchors } from './remediation/anchorReconcile';
 import { diffDeclarations } from './compare/declarationDiff';
@@ -93,8 +92,6 @@ export default function ReverseEngineeringView({ endpointUrl, onReviewText, onGe
   // R2 review state.
   const [reviewBusy, setReviewBusy] = useState(false);
   const [review, setReview] = useState(null);
-  // Remediation: the synthesized optimal target { target, changes, notes }.
-  const [target, setTarget] = useState(null);
   // Requirements-driven target generation (the LLM path).
   const [reqDraft, setReqDraft] = useState('');
   const [genBusy, setGenBusy] = useState(false);
@@ -251,7 +248,7 @@ export default function ReverseEngineeringView({ endpointUrl, onReviewText, onGe
     } finally { setBusy(false); }
   };
 
-  const clearScan = () => { setResult(null); setReview(null); setTarget(null); setReqDraft(''); setLlmTarget(null); setLlmDiff(null); setLlmNotes([]); };
+  const clearScan = () => { setResult(null); setReview(null); setReqDraft(''); setLlmTarget(null); setLlmDiff(null); setLlmNotes([]); };
 
   // result is now the framework's merged estate: { objects, edges, notes, scannedRepos, orchestratorId }.
   const objs = result ? Object.values(result.objects) : [];
@@ -311,7 +308,7 @@ export default function ReverseEngineeringView({ endpointUrl, onReviewText, onGe
 
   const runReview = async () => {
     if (!onReviewText || !result) return;
-    setErr(null); setReview(null); setTarget(null); setReviewBusy(true);
+    setErr(null); setReview(null); setReviewBusy(true);
     try {
       const enriched = applyIntake(result);
       const r = await onReviewText(synthDescription(enriched));
@@ -323,23 +320,6 @@ export default function ReverseEngineeringView({ endpointUrl, onReviewText, onGe
 
   const adopt = () => { if (onAdopt && result) onAdopt(applyIntake(result)); };
 
-  // ── Target synthesis (Remediation) ────────────────────────────────────────────
-  // Build the OPTIMAL target from the recovered estate + intake + the governance
-  // review, deterministically (synthesizeTarget). Requires a review first (it supplies
-  // the per-agent/per-system suggested values). The target is anchored to recovered
-  // ids → adopt it, or Compare it against the recovered estate to see the change set.
-  const synthesize = () => {
-    if (!result) return;
-    if (!review) { setErr('Run “Review for governance gaps” first — the target is built from its suggestions.'); return; }
-    setErr(null);
-    try {
-      const out = synthesizeTarget(result, { sysName, residency, regimes, orchId }, review);
-      setTarget(out);
-    } catch (e) {
-      setErr(`Could not synthesize the target. [${e?.message || e}]`);
-    }
-  };
-  const adoptTarget = () => { if (onAdopt && target) onAdopt(target.target); };
 
   // ── Requirements-driven target generation (the LLM path) ──────────────────────
   // Draft a CDI requirements doc from the recovered estate + intake, let the operator
@@ -622,44 +602,17 @@ export default function ReverseEngineeringView({ endpointUrl, onReviewText, onGe
                     ))}
                   </ul>
                   <p className="atlas-re-foot">
-                    These are the declarations to add to govern the recovered code. Synthesize them into an
-                    optimal target below — or adopt the estate and fill them by hand.
+                    These are the declarations to add to govern the recovered code. Generate an optimal
+                    target from them below — or adopt the recovered estate as-is and fill them by hand.
                   </p>
-
-                  {/* Remediation: synthesize the optimal target from these suggestions. */}
-                  <div className="atlas-re-synth">
-                    <button className="atlas-re-synthbtn" onClick={synthesize} disabled={!review}>
-                      ⚙ Synthesize optimal target →
-                    </button>
-                    {target && (
-                      <div className="atlas-re-target">
-                        <div className="atlas-re-targethd">
-                          Optimal target — <strong>{target.changes.length}</strong> change(s) anchored to the recovered estate
-                          {target.changes.some((c) => c.proposed) && <span className="atlas-re-proposedtag"> · {target.changes.filter((c) => c.proposed).length} structural (ratify)</span>}
-                        </div>
-                        <ul className="atlas-re-changelist">
-                          {target.changes.map((c, i) => (
-                            <li key={i} className={c.proposed ? 'proposed' : ''}>
-                              <span className={`atlas-re-src src-${c.source.toLowerCase()}`}>{c.source}{c.proposed ? '·PROPOSED' : ''}</span>
-                              <code>{c.id}</code>.{c.field}: <em>{fmtv(c.from)}</em> → <strong>{fmtv(c.to)}</strong>
-                            </li>
-                          ))}
-                        </ul>
-                        <div className="atlas-re-targetactions">
-                          {onAdopt && <button className="atlas-re-adopt" onClick={adoptTarget} title="Load the OPTIMAL TARGET into the Declaration tab — governance filled, control plane proposed, ready to validate + export the build bundle">Adopt target as declaration →</button>}
-                          <span className="atlas-re-targethint">Adopt → Declaration tab → resolve any «confirm» placeholders → Export build bundle. Or load the recovered + target in Compare to see the diff.</span>
-                        </div>
-                      </div>
-                    )}
-                  </div>
 
                   {/* Requirements-driven target generation (the LLM path) — the FULL
                       future state (new CDI agents/tasks, MIMIC/EDI ingest, a real
                       orchestrator), anchored to the recovered ids. */}
                   <div className="atlas-re-reqgen">
                     <div className="atlas-re-reqgenhd">
-                      Or generate the <strong>full target</strong> from requirements
-                      <span className="atlas-re-reqgensub"> — the deterministic button above only governs what exists; this designs the complete CDI product.</span>
+                      Generate the <strong>optimal target</strong> from requirements
+                      <span className="atlas-re-reqgensub"> — drafts a NIST AI RMF requirements spec from the recovered estate, then designs the complete governed target (existing agents + the net-new components a full product needs), anchored to what exists.</span>
                     </div>
                     <div className="atlas-re-reqgenbar">
                       <button onClick={draftReq} disabled={!result} title="Draft a CDI requirements doc (NIST AI RMF) from the recovered estate — then edit it">📝 Draft requirements</button>
