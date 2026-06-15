@@ -1087,7 +1087,7 @@ export default function UnifiedModeler() {
            Declaration tab to Save/Export and back must NOT discard a (paid) generated
            target. Keeping it mounted preserves the component's own state with no
            internal-state refactor. */}
-       <div style={{ display: section === 'reverse' ? 'contents' : 'none' }}>
+       <div style={section === 'reverse' ? { flex: 1, minWidth: 0, minHeight: 0, overflow: 'auto' } : { display: 'none' }}>
         <ReverseEngineeringView
           endpointUrl={endpointUrl}
           onReviewText={(text) => httpEndpointProvider(endpointUrl).reviewRequirements(text)}
@@ -1137,7 +1137,7 @@ export default function UnifiedModeler() {
             </div>
           );
         })()
-       ) : (
+       ) : section === 'model' ? (
         <>
         <ModelTree
           objects={visibleObjects}
@@ -1235,7 +1235,7 @@ export default function UnifiedModeler() {
           />
         )}
         </>
-       )}
+       ) : null}
       </div>
 
       {idAlert && (
