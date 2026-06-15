@@ -935,8 +935,10 @@ export default function UnifiedModeler() {
     <div className="atlas-page">
       <div className="atlas-toolbar">
         <div className="atlas-brand">
-          <img className="atlas-logo" src={`${import.meta.env.BASE_URL}agent-atlas-logo.svg`} alt="" aria-hidden="true" />
-          <h1>Agent Atlas</h1>
+          {/* Product wordmark (no corporate fox). "Atlas" is the short display form;
+              the product/marketing name is Agent Atlas. A bespoke icon comes later. */}
+          <span className="atlas-mark" aria-hidden="true">A</span>
+          <h1 className="atlas-wordmark"><span className="atlas-wordmark-main">Atlas</span><span className="atlas-wordmark-sub">Agent Atlas</span></h1>
         </div>
         <div className="atlas-section-switch" role="tablist">
           {SECTIONS.map((s) => (

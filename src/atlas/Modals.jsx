@@ -77,7 +77,7 @@ export function AboutModal({ onClose }) {
   return (
     <Backdrop onClose={onClose}>
       <div className="atlas-about-head">
-        <img className="atlas-about-logo" src={`${import.meta.env.BASE_URL}agent-atlas-logo.svg`} alt="" aria-hidden="true" />
+        <span className="atlas-mark atlas-about-mark" aria-hidden="true">A</span>
         <h2>Agent Atlas Studio</h2>
       </div>
       <p>
