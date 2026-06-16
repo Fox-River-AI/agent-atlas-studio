@@ -56,6 +56,19 @@ const LANGUAGES = [
 // way later — no re-architecture, just another entry.
 const HOST_AXIOM = 'axiom-linux';
 const HOST_STUDIO = 'studio-mac';
+// "This Mac" is ONE host even though it has TWO scan runtimes: the in-studio TS
+// scanner (for the UI / TS/JS) and a LOCAL Python backend (for Python/SQL/Spark). We
+// hide that split — the operator picks "This Mac", browses once (Tauri FS), and each
+// repo dispatches to the right runtime BY LANGUAGE (TS → in-studio, Python → local
+// backend). The local Python scanner is tools/atlas_scanner/local_scanner.py on this
+// machine (default :8011) — the "clone client repos locally and scan them" flow, no
+// Axiom dependency. Override its URL with VITE_ATLAS_LOCAL_SCANNER.
+const LOCAL_SCANNER_BASE =
+  (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_ATLAS_LOCAL_SCANNER)
+  || 'http://127.0.0.1:8011/';
+// Languages on the Mac that need the local Python BACKEND (http runtime) rather than
+// the in-studio TS scanner. Everything else on the Mac uses the studio runtime.
+const MAC_BACKEND_LANGUAGES = new Set(['python', 'sql', 'spark']);
 // browseKind: 'http' → call this host's HTTP /list-dir; 'studio' → list the LOCAL
 // filesystem in-process via Tauri fs (the Mac host has no server). browsable is set
 // at runtime (the Mac host only browses inside the desktop app, not browser dev).
@@ -64,11 +77,30 @@ function hostsFor(endpointUrl, inTauri) {
   return [
     { id: HOST_AXIOM, label: 'Axiom · Linux backend', baseUrl: axiomBase, browseKind: 'http', browsable: !!axiomBase,
       note: 'Python/SQL/Spark repos on the Axiom host. Browses + scans via the backend.' },
-    { id: HOST_STUDIO, label: 'Studio · this Mac', baseUrl: null, browseKind: 'studio', browsable: inTauri,
+    { id: HOST_STUDIO, label: 'This Mac', baseUrl: null, browseKind: 'studio', browsable: inTauri,
+      // ONE host, TWO runtimes (resolved per repo by language): TS/JS → in-studio
+      // scanner; Python/SQL/Spark → the local Python backend (LOCAL_SCANNER_BASE).
+      localBackendBase: LOCAL_SCANNER_BASE,
       note: inTauri
-        ? 'Repos on this machine (e.g. the UI). Browses the local filesystem; scan runs studio-side (the TS scanner lands in DIAG-51).'
+        ? 'Repos on this machine. Browses the local filesystem. TS/JS scans in-app; Python/SQL/Spark scan via the local Atlas scanner (run tools/atlas_scanner/local_scanner.py first).'
         : 'Repos on this machine — folder browsing needs the desktop app (Tauri). In browser dev, add by typed path.' },
   ];
+}
+
+// Resolve a repo's SCAN runtime + base URL FROM ITS LANGUAGE within a host. This is
+// the "one host, dispatch-by-language" rule: the Mac browses studio-side, but a
+// Python repo on it scans via the local HTTP backend, while a TS repo scans in-studio.
+// Axiom is single-runtime (always http on its baseUrl). Returns { scanKind, baseUrl }.
+function runtimeForRepoOnHost(host, language) {
+  if (!host) return { scanKind: 'http', baseUrl: null };
+  if (host.browseKind === 'studio') {
+    // The Mac: pick runtime by language.
+    if (language && MAC_BACKEND_LANGUAGES.has(language)) {
+      return { scanKind: 'http', baseUrl: host.localBackendBase || null };
+    }
+    return { scanKind: 'studio', baseUrl: null };
+  }
+  return { scanKind: host.browseKind || 'http', baseUrl: host.baseUrl || null };
 }
 
 const RESIDENCY = [
@@ -138,14 +170,25 @@ export default function ReverseEngineeringView({ endpointUrl, onReviewText, onGe
 
   // Open / navigate the folder browser FOR a given host. Only browsable hosts (a
   // reachable baseUrl) can be navigated; others tell the operator to use a typed path.
-  const openBrowse = (hostId = HOST_AXIOM) => {
+  const openBrowse = async (hostId = HOST_AXIOM) => {
     const h = hostById(hostId);
     if (!h || !h.browsable) {
       setErr(`Can’t browse ${h ? h.label : 'that host'} yet — ${h?.note || 'no reachable endpoint'}. Add its repos by typed path.`);
       return;
     }
-    // Axiom starts at its backend-reported workspace root; the Mac starts at $HOME.
-    navigate(h.browseKind === 'http' ? (browseRoot || '') : '', hostId);
+    // Each HTTP host opens at ITS OWN workspace root — NOT the shared browseRoot,
+    // which is the Axiom default (/home/exx) and is WRONG for any other http host
+    // (e.g. the local Mac scanner, whose root is /Users/...). Ask this host's own
+    // /scan-workspace; fall back to "" (the host's lister picks a sensible default)
+    // if it's unreachable. The studio (Mac FS) host needs no root — "" = $HOME.
+    let start = '';
+    if (h.browseKind === 'http') {
+      try {
+        const res = await fetch(base('scan-workspace', hostId));
+        if (res.ok) start = (await res.json()).browseRoot || '';
+      } catch { /* unreachable → start = "", navigate surfaces the error */ }
+    }
+    navigate(start, hostId);
   };
   // Navigate ONE host. Axiom = HTTP /list-dir on the backend; Studio-Mac = local FS
   // via Tauri. Both return the SAME { path, parent, entries } shape, so the modal
@@ -205,7 +248,10 @@ export default function ReverseEngineeringView({ endpointUrl, onReviewText, onGe
         // so a mixed estate (Python now, TS-on-Mac pending DIAG-51) still yields the
         // recoverable part instead of failing wholesale.
         const host = hostById(repo.host) || hostById(HOST_AXIOM);
-        const ctx = { endpointUrl, hostBaseUrl: host?.baseUrl || null, hostLabel: host?.label, hostScanKind: host?.browseKind || 'http' };
+        // Resolve runtime BY LANGUAGE within the host (the Mac is one host with two
+        // runtimes: TS in-studio, Python via the local backend). Axiom is single-runtime.
+        const rt = runtimeForRepoOnHost(host, repo.language);
+        const ctx = { endpointUrl, hostBaseUrl: rt.baseUrl, hostLabel: host?.label, hostScanKind: rt.scanKind };
         // Census the repo's language inventory REGARDLESS of whether the scan
         // succeeds — so an unscannable/unsupported tier is still counted + reported
         // loudly (no silent "fully covered"). Census failure is non-fatal.
