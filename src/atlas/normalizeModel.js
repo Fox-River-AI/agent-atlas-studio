@@ -11,7 +11,7 @@
 //   subjectAreas = [ { id, name, memberIds, hiddenIds } ]
 import { blankData } from './blankData';
 
-const KINDS = new Set(['orchestrator', 'task', 'agent', 'tool', 'job', 'system', 'router']);
+const KINDS = new Set(['orchestrator', 'task', 'agent', 'tool', 'job', 'system', 'router', 'gate']);
 const SEMVER = /^\d+\.\d+\.\d+$/;
 
 // Repair the handful of fields that have HARD schema constraints, in place.
