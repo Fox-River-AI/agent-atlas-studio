@@ -1,0 +1,66 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/Fox-River-AI/agent-atlas/main/registry/schema/gate.schema.json",
+  "title": "agent-atlas Gate manifest (controls layer)",
+  "description": "A declarative, versioned contract for one GATE — a control over a consequential transition. Gates are a CONTROLS LAYER, distinct from the seven component kinds (which describe the system); a gate governs a transition of the system. A gate binds: the transition it guards, a PLUGGABLE deterministic reasoner (the proof engine — NEVER an LLM), the rules + fact schema it proves against (instance-specific), and a mode. The proof spine lives here. No LLM may sit in a gate's path: that is the safety invariant that makes the proof authoritative.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["apiVersion", "kind", "id", "version", "owner", "description", "transition", "reasoner", "mode"],
+  "properties": {
+    "apiVersion": { "const": "agent-atlas/v1" },
+    "kind": { "const": "Gate" },
+    "id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]*$" },
+    "version": { "type": "string", "pattern": "^\\d+\\.\\d+\\.\\d+$" },
+    "owner": { "type": "string", "minLength": 1 },
+    "description": { "type": "string", "minLength": 1 },
+    "transition": {
+      "type": "string",
+      "minLength": 1,
+      "description": "The consequential transition this gate guards, e.g. 'validate->package' (G-PROMOTE) or 'act' (G-ACT). Free-form but should name the from->to stages or the stage where the action fires."
+    },
+    "reasoner": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["engine", "impl"],
+      "description": "The PLUGGABLE deterministic proving engine behind evaluate(facts,rules)->verdict+violations. ALWAYS deterministic (a logic/constraint solver), NEVER an LLM — pinning a proof to an LLM is a category error that turns a proof into a plausible guess.",
+      "properties": {
+        "engine": {
+          "type": "string",
+          "description": "The reasoner family, e.g. 'asp' (Answer Set Programming) or 'smt'. Pluggable per the framework's reasoner interface."
+        },
+        "impl": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The concrete implementation, e.g. 'clingo', 'z3', 'clingcon'."
+        },
+        "version": {
+          "type": "string",
+          "description": "Pinned implementation version for reproducibility, e.g. '5.8.0'."
+        }
+      }
+    },
+    "rules_ref": {
+      "type": "string",
+      "description": "INSTANCE-specific reference (path/id) to the declared rules this gate proves against (e.g. an ASP program). The rules are the control; the engine is plumbing. [I]"
+    },
+    "fact_schema": {
+      "type": "string",
+      "description": "INSTANCE-specific reference (path/id) to the typed fact schema the proposal is grounded into before proving. [I]"
+    },
+    "mode": {
+      "enum": ["shadow", "live"],
+      "description": "'shadow' attests 'would have done X' without effect; 'live' executes on PERMITTED. New gates default to shadow."
+    },
+    "governance": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Regime-neutral controls (NIST AI RMF). A gate is itself a governed control surface.",
+      "properties": {
+        "data_classification": { "enum": ["public", "internal", "confidential", "regulated"] },
+        "data_tags": { "type": "array", "items": { "type": "string" }, "uniqueItems": true },
+        "residency": { "enum": ["any", "in-region", "on-prem"] },
+        "retention": { "type": "string" }
+      }
+    }
+  }
+}

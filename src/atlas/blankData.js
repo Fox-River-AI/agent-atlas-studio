@@ -33,6 +33,10 @@ export function blankData(kind, presetId) {
         rules: [{ when: 'task_complexity == high', select: 'claude-opus-4-8' }],
         fallback: 'claude-opus-4-8',
       };
+    case 'gate':
+      // The CONTROLS layer: a control over a consequential transition. Its reasoner is
+      // a deterministic proving engine (never an LLM); rules/factSchema are instance refs.
+      return { ...common, description: '', transition: '', reasoner: { engine: 'asp', impl: 'clingo', version: '' }, rulesRef: '', factSchema: '', mode: 'shadow' };
     default:
       return common;
   }
@@ -45,4 +49,5 @@ export const CREATABLE_KINDS = [
   { kind: 'router', label: 'Router' },
   { kind: 'job', label: 'Job' },
   { kind: 'system', label: 'System' },
+  { kind: 'gate', label: 'Gate (control)' },
 ];

@@ -21,6 +21,9 @@ import jobSchema from './schemas/job.schema.json';
 import systemSchema from './schemas/system.schema.json';
 import routerSchema from './schemas/router.schema.json';
 import orchestratorSchema from './schemas/orchestrator.schema.json';
+// Gate = the CONTROLS layer (a control over a consequential transition: a pluggable
+// deterministic reasoner + rules + mode). Studio-prototyped ahead of upstreaming.
+import gateSchema from './schemas/gate.schema.json';
 
 const ajv = new Ajv({ allErrors: true, strict: false });
 
@@ -30,6 +33,7 @@ export const validateJob = ajv.compile(jobSchema);
 export const validateSystem = ajv.compile(systemSchema);
 export const validateRouter = ajv.compile(routerSchema);
 export const validateOrchestrator = ajv.compile(orchestratorSchema);
+export const validateGate = ajv.compile(gateSchema);
 
 // Per-node-type validator lookup, so the model layer stays generic.
 export const VALIDATORS = {
@@ -39,9 +43,10 @@ export const VALIDATORS = {
   job: validateJob,
   system: validateSystem,
   router: validateRouter,
+  gate: validateGate,
 };
 
-export { agentSchema, toolSchema, jobSchema, systemSchema, routerSchema, orchestratorSchema };
+export { agentSchema, toolSchema, jobSchema, systemSchema, routerSchema, orchestratorSchema, gateSchema };
 
 // The model+pinned version a freshly-dropped agent starts with. Mirrors the
 // example manifest in the submodule so a new model validates as soon as the

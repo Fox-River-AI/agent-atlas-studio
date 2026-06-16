@@ -165,55 +165,16 @@ export default function PropertiesPanel({ node, onChange, errors, idError, dirty
           </Field>
 
           <fieldset className="atlas-group">
-            <legend>model / reasoning</legend>
-            {/* An agent reasons via ONE of: a pinned LLM, a deterministic/analytical
-                ENGINE (code, not a language model — for formal reasoners & analytical
-                optimizers), or a Router. Picking 'engine' is what keeps a prover or a
-                Kelly sizer from being falsely pinned to an LLM. */}
-            <Field label="kind" hint="LLM = language model · Engine = a solver/optimizer (code, not an LLM) · Router = dynamic LLM selection (set via a router edge)">
-              <select
-                value={d.model?.engine ? 'engine' : (d.model?.router ? 'router' : 'llm')}
-                onChange={(e) => {
-                  const k = e.target.value;
-                  if (k === 'engine') set({ model: { engine: 'deterministic', impl: '' } });
-                  else if (k === 'llm') set({ model: { provider: '', name: '', pinned: '' } });
-                  else set({ model: { router: d.model?.router || '' } });
-                }}
-              >
-                <option value="llm">LLM (pinned)</option>
-                <option value="engine">Engine (deterministic / analytical)</option>
-                <option value="router">Router (via edge)</option>
-              </select>
+            <legend>model</legend>
+            <Field label="provider">
+              <input value={d.model?.provider || ''} onChange={(e) => set({ model: { ...d.model, provider: e.target.value } })} />
             </Field>
-            {d.model?.engine ? (
-              <>
-                <Field label="engine" hint="'deterministic' = a logic/constraint solver (ASP/SMT) whose output is a proof · 'analytical' = a closed-form optimizer (Kelly, Bayesian)">
-                  <select value={d.model.engine} onChange={(e) => set({ model: { ...d.model, engine: e.target.value } })}>
-                    <option value="deterministic">deterministic</option>
-                    <option value="analytical">analytical</option>
-                  </select>
-                </Field>
-                <Field label="impl" hint="pinned implementation, e.g. clingo-5.8.0, fractional-kelly-v1, z3-4.13">
-                  <input value={d.model.impl || ''} onChange={(e) => set({ model: { ...d.model, impl: e.target.value } })} placeholder="clingo-5.8.0" />
-                </Field>
-              </>
-            ) : d.model?.router ? (
-              <Field label="router" hint="set automatically by drawing a router edge; this agent selects its model dynamically">
-                <input value={d.model.router} readOnly />
-              </Field>
-            ) : (
-              <>
-                <Field label="provider">
-                  <input value={d.model?.provider || ''} onChange={(e) => set({ model: { provider: e.target.value, name: d.model?.name || '', pinned: d.model?.pinned || '' } })} />
-                </Field>
-                <Field label="name">
-                  <input value={d.model?.name || ''} onChange={(e) => set({ model: { provider: d.model?.provider || '', name: e.target.value, pinned: d.model?.pinned || '' } })} />
-                </Field>
-                <Field label="pinned" hint="exact, pinned version">
-                  <input value={d.model?.pinned || ''} onChange={(e) => set({ model: { provider: d.model?.provider || '', name: d.model?.name || '', pinned: e.target.value } })} />
-                </Field>
-              </>
-            )}
+            <Field label="name">
+              <input value={d.model?.name || ''} onChange={(e) => set({ model: { ...d.model, name: e.target.value } })} />
+            </Field>
+            <Field label="pinned" hint="exact, pinned version">
+              <input value={d.model?.pinned || ''} onChange={(e) => set({ model: { ...d.model, pinned: e.target.value } })} />
+            </Field>
           </fieldset>
 
           <Field label="refusal conditions" hint="When should this agent DECLINE rather than guess? One situation per line (at least one required). Each line is a condition that makes the agent emit its refusal value instead of an answer.">

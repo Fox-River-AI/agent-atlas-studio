@@ -18,7 +18,7 @@
       "description": "A single responsibility. If you need the word 'and' to state it, you have two agents."
     },
     "model": {
-      "description": "How this agent reasons. EXACTLY ONE of: a single pinned LLM (the default, reproducible case); a Router reference for dynamic LLM selection; OR a deterministic/analytical ENGINE (the agent's reasoning is code — a solver or an analytical optimizer — NOT a language model). The engine variant is what lets a domain-agnostic estate declare a formal reasoner (ASP/SMT) or an analytical proposer (e.g. Kelly sizing) without falsely pinning it to an LLM.",
+      "description": "Either a single pinned model (the default, reproducible case) OR a reference to a Router for dynamic model selection. Exactly one — never both. An agent is an LLM reasoner; deterministic proving lives in the CONTROLS layer (a gate's pluggable reasoner), never on an agent.",
       "oneOf": [
         {
           "type": "object",
@@ -37,17 +37,6 @@
           "required": ["router"],
           "properties": {
             "router": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]*$", "description": "id of a Router that selects the model dynamically." }
-          }
-        },
-        {
-          "type": "object",
-          "additionalProperties": false,
-          "required": ["engine", "impl"],
-          "description": "A deterministic/analytical engine — the agent's 'reasoning' is code, not a language model. Use for formal reasoners (ASP/Clingo, SMT/Z3) and analytical optimizers (fractional-Kelly, Bayesian sizing). Pinning such an agent to an LLM is a category error that silently turns a proof or an optimum into a plausible guess.",
-          "properties": {
-            "engine": { "enum": ["deterministic", "analytical"], "description": "'deterministic' = a logic/constraint solver whose output is a proof or a fixed computation (ASP/SMT). 'analytical' = a closed-form/optimization method (Kelly, Bayesian)." },
-            "impl": { "type": "string", "minLength": 1, "description": "The concrete implementation, pinned for reproducibility (e.g. 'clingo-5.8.0', 'fractional-kelly-v1', 'z3-4.13')." },
-            "parameters": { "type": "object" }
           }
         }
       ]

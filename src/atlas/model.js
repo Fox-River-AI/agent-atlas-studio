@@ -185,6 +185,33 @@ export function orchestratorManifest(node) {
 }
 
 // Build the manifest object for any node, dispatched by type.
+// A GATE — the controls layer. Binds a consequential transition to a pluggable
+// DETERMINISTIC reasoner (the proof engine, never an LLM), the rules + fact schema it
+// proves against, and a mode. The proof spine's exported home; owned by the orchestrator,
+// never by an agent (no LLM in the proof path = the safety invariant).
+export function gateManifest(node) {
+  const d = node.data;
+  const r = d.reasoner || {};
+  return {
+    apiVersion: 'agent-atlas/v1',
+    kind: 'Gate',
+    id: d.id,
+    version: d.version || '1.0.0',
+    owner: d.owner || '',
+    description: d.description || '',
+    transition: d.transition || '',
+    reasoner: {
+      engine: r.engine || 'asp',
+      impl: r.impl || 'clingo',
+      ...(r.version ? { version: r.version } : {}),
+    },
+    ...(d.rulesRef ? { rules_ref: d.rulesRef } : {}),
+    ...(d.factSchema ? { fact_schema: d.factSchema } : {}),
+    mode: d.mode || 'shadow',
+    ...(governanceBlock(d) ? { governance: governanceBlock(d) } : {}),
+  };
+}
+
 export function manifestFor(node, nodes, edges) {
   switch (node.type) {
     case 'orchestrator': return orchestratorManifest(node);
@@ -193,6 +220,7 @@ export function manifestFor(node, nodes, edges) {
     case 'job': return jobManifest(node);
     case 'system': return systemManifest(node);
     case 'router': return routerManifest(node);
+    case 'gate': return gateManifest(node);
     default: return null;
   }
 }
@@ -216,6 +244,7 @@ const REGISTRY_DIRS = {
   system: { dir: 'systems', suffix: '.system.yaml' },
   router: { dir: 'routers', suffix: '.router.yaml' },
   orchestrator: { dir: '.', suffix: '.orchestrator.yaml' },
+  gate: { dir: 'gates', suffix: '.gate.yaml' },
 };
 
 // Produce the full registry as a map of relative path -> file contents (string).
