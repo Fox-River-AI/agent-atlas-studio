@@ -14,19 +14,34 @@
 // - System parent: the owning Agent, OR the Task when the datastore is shared
 //   across the stage.
 // - Router belongs to exactly one Agent (it selects THAT agent's model) — Agent only.
-// - Tools, Jobs, Systems, Routers are LEAVES — no outgoing relationships.
+// - Gate is the CONTROLS layer: it parents to the Orchestrator (beside Tasks, not under
+//   them), and a gated Task connects to the Gate it must pass (the gated-task → gate
+//   edge). A Gate contains nothing (its reasoner is a field, not a child object).
+// - Tools, Jobs, Systems, Routers, Gates are LEAVES — no outgoing CONTAINMENT.
 export const ALLOWED_TARGETS = {
-  orchestrator: new Set(['task']),
+  orchestrator: new Set(['task', 'gate']),
   task: new Set(['agent', 'task', 'system', 'job']),
   agent: new Set(['tool', 'job', 'router', 'system']),
   tool: new Set([]),
   job: new Set([]),
   system: new Set([]),
   router: new Set([]),
+  gate: new Set([]),
+};
+
+// EDGE legality is broader than CONTAINMENT: a gated Task draws an EDGE to the Gate it
+// must pass (the gated-task → gate relationship), but the Gate is PARENTED to the
+// orchestrator, not contained by the task. ALLOWED_TARGETS above governs containment
+// (used by parentKindsFor for the create dialog, so a Gate's only offered parent is the
+// orchestrator). This set adds connection-only pairs the canvas may draw as edges
+// without implying parentage.
+const EXTRA_EDGE_TARGETS = {
+  task: new Set(['gate']),   // gated-task → gate (edge, not parent)
 };
 
 export function canConnect(sourceKind, targetKind) {
-  return !!ALLOWED_TARGETS[sourceKind]?.has(targetKind);
+  return !!ALLOWED_TARGETS[sourceKind]?.has(targetKind)
+      || !!EXTRA_EDGE_TARGETS[sourceKind]?.has(targetKind);
 }
 
 // The kinds that may CONTAIN (be the parent of) a given child kind — the reverse
