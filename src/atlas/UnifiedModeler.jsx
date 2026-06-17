@@ -824,9 +824,20 @@ export default function UnifiedModeler() {
     if (isTauri) {
       try {
         const { open } = await import('@tauri-apps/plugin-dialog');
-        const { writeTextFile, mkdir } = await import('@tauri-apps/plugin-fs');
-        const dir = await open({ directory: true, title: 'Choose an empty folder for the build bundle' });
+        const { writeTextFile, mkdir, remove, exists } = await import('@tauri-apps/plugin-fs');
+        const dir = await open({ directory: true, title: 'Choose a folder for the build bundle (its registry/ is replaced)' });
         if (!dir) { setExportMsg('Export cancelled.'); return; }
+        // CLEAR-BEFORE-WRITE: a bundle is a complete render of the current model. Writing
+        // file-by-file into a dir that already holds a PREVIOUS export merges stale
+        // manifests (e.g. an agent that no longer exists) with the new ones — a
+        // Frankenstein bundle. So first remove the subtrees the export OWNS and fully
+        // regenerates (registry/, governance/), then write fresh. We only ever delete
+        // those two known subdirs — NEVER the picked dir itself — so an operator who
+        // points at a folder with their own files loses nothing outside the bundle.
+        for (const owned of ['registry', 'governance']) {
+          const sub = `${dir}/${owned}`;
+          try { if (await exists(sub)) await remove(sub, { recursive: true }); } catch { /* best-effort; write still overwrites files */ }
+        }
         const made = new Set();
         for (const [rel0, content] of Object.entries(files)) {
           // Normalize: the orchestrator's dir is '.', producing 'registry/./x' —
@@ -837,7 +848,7 @@ export default function UnifiedModeler() {
           if (parent && !made.has(parent)) { try { await mkdir(parent, { recursive: true }); } catch { /* exists */ } made.add(parent); }
           await writeTextFile(full, content);
         }
-        setExportMsg(`Build bundle written (${count} files) → ${dir}`);
+        setExportMsg(`Build bundle written (${count} files, registry replaced) → ${dir}`);
       } catch (e) {
         setExportMsg(`Bundle export failed: ${e?.message || e}`);
       }
