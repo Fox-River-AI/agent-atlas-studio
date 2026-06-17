@@ -14,8 +14,8 @@
     "owner": { "type": "string", "minLength": 1 },
     "description": { "type": "string" },
     "systemKind": {
-      "enum": ["relational-db", "vector-store", "graph-db", "document-store", "fhir", "state-store", "external-api", "other"],
-      "description": "The class of system, so the data/knowledge layer (RAG vector stores, ontology graph DBs, run-state stores) is legible in the model."
+      "enum": ["relational-db", "vector-store", "graph-db", "document-store", "fhir", "state-store", "external-api", "service", "compute-resource", "other"],
+      "description": "The class of system. 'System' is the umbrella for anything acted upon (not an actor): DATA sources (relational-db/vector-store/graph-db/document-store/fhir/state-store — governed by classification/residency/retention), SERVICES (external-api/service — a write/egress target governed by scoped auth), and COMPUTE (compute-resource e.g. a GPU pool — governed by quota/priority/contention via resource-admission, NOT the proof spine). Governance metadata that matters DIFFERS by subtype (a planned discriminated-union refinement); see object-semantics.md."
     },
     "connection": { "type": "string", "description": "Connection hint (host/endpoint/DSN), not secrets." },
     "auth": {
