@@ -1,11 +1,17 @@
 # Object Semantics — what each kind *is*, and what it *does*
 
-**Status:** Authoritative reference (2026-06-10). Defines the meaning of each of the
-seven object kinds and the hierarchy between them. This is the contract that
-**DIAG-15 (codegen)**, **DIAG-37 (requirements→model generation)**, and the
-modeling UX (the "Add child" menu, the create parent-picker, field help) build
+**Status:** Authoritative reference (updated 2026-06-17). Defines the meaning of the seven
+**component** object kinds (the SYSTEM) **and the separate CONTROLS layer — the `gate`**
+(controls over the system's consequential transitions) — and the hierarchy between them.
+This is the contract that **DIAG-15 (codegen)**, **DIAG-37 (requirements→model generation)**,
+and the modeling UX (the "Add child" menu, the create parent-picker, field help) build
 against. If the rules in `src/atlas/relationships.js` and this doc ever disagree,
 reconcile them — they must stay in sync.
+
+> **Two axes.** The seven component kinds describe the *system* (what runs). The controls
+> layer (gates) describes *controls over the system's transitions* (what must be proven before
+> a consequential change takes effect) — the same way a compliance framework separates *assets*
+> from *controls*. A gate is **not** an eighth component kind; it is a different axis.
 
 ---
 
@@ -30,21 +36,48 @@ decision, and can refuse. Everything else is something an agent (or the orchestr
 | **Router** | dynamic model selection | a *policy* that picks which model an agent uses, by complexity / quality / latency / cost | does no work; only selects | a model-selection policy function |
 | **System** | a datastore / external system | exists to be touched — relational/vector/graph store, FHIR, external API, state store, file drop | does nothing on its own; it is acted upon, not an actor | a client / connection config |
 
+## The controls layer — Gate
+
+A **Gate** is a control over a *consequential transition* — a separate layer from the seven
+component kinds. It is the home of the **proof spine** (the differentiator): no consequential
+change (promote a model, deploy, expose an endpoint, take the action, retrain, admit regulated
+data) takes effect until the gate's reasoner **proves** it permitted against declared rules.
+
+| Kind | What it IS | What it DOES | What it does NOT do | Becomes (codegen) |
+|---|---|---|---|---|
+| **Gate** | a control over one consequential transition | binds the transition + a **pluggable deterministic reasoner** (engine/impl/version) + the rules & fact-schema it proves against + a mode (shadow/live); grounds a proposal, proves it, attests | does **not** reason with an LLM (its reasoner is a logic/constraint solver — ASP/SMT, never a language model); does not propose | a proof-gate: invoke the reasoner via `evaluate(facts,rules)→verdict+violations`, attest |
+
+**The safety invariant (why a gate is its own layer):** the prover must have **no LLM and no
+agent in its ownership path** — that is exactly what makes a proof authoritative rather than a
+plausible guess. A prover is therefore neither an Agent (an agent IS an LLM) nor an agent-owned
+Tool. It is the gate's reasoner, and the **gate is owned by the orchestrator** (a deterministic
+control plane). The gate schema enforces this: a gate's `reasoner` is `{engine, impl, version}`
+with `additionalProperties:false`, so an LLM-shaped reasoner (provider/name) is rejected.
+
+- An **analytical computation an agent relies on** (e.g. a Kelly sizer that computes a candidate
+  magnitude the agent then *proposes*) is an agent-owned **Tool**, not a gate and not an agent.
+- A **gated stage references its gate by id** (a task→gate edge); the stage does not own the reasoner.
+- The controls layer is the **conformance-evidence surface**: "enumerate every consequential
+  transition with its engine, rules, version, and mode" is `list gates` — the assessment artifact,
+  alongside the attestation log.
+
 ## Hierarchy (must match `relationships.js`)
 
 ```
-orchestrator → task
+orchestrator → task, gate
 task         → agent, task, system, job
 agent        → tool, job, router, system
+gate         → (leaf — referenced by a gated task via edge; reasoner is a field, not a child)
 tool / job / system / router → (leaves — no children)
 ```
 
-- **Only Task sits directly under the orchestrator.**
-- **Tools are agent-invoked only.** A Tool is a capability something *calls*; an orphan
-  tool under a task would be "a function nobody invokes." A stage-level deterministic
-  operation with no reasoning is therefore a **Job** (workflow-dispatched — it has the
-  queue/timeout/retries such work wants) or part of the orchestrator's control-flow —
-  **never** a Task→Tool.
+- **Task and Gate sit directly under the orchestrator.** (Tasks = the system's stages; gates =
+  the controls over consequential transitions. The orchestrator owns both.)
+- **Tools belong to an agent OR the orchestrator.** Usually an agent-owned capability the agent
+  *calls* (e.g. a sizer/optimizer that informs a proposal). A deterministic capability that must
+  NOT have an LLM in its path parents to the orchestrator's control plane. (A stage-level
+  deterministic op with no reasoning is still a **Job** if it's long-running/queued.)
+- **A prover is NOT a Tool and NOT an Agent** — it is a Gate's reasoner (controls layer above).
 - **Job parent = the dispatcher:** agent-dispatched → under the Agent; workflow/
   orchestrator-dispatched → under the Task. (A Job is not a kind of tool-call; don't put
   it under a Tool.)

@@ -24,17 +24,25 @@ The demo is magic; six months later the system is a rat's nest — nobody can sa
 
 ## What it does
 
-- **Model the whole platform.** Seven first‑class object types in one hierarchical, collapsible graph:
-  - **Orchestrator** — the single control plane (which task/agent runs, in what order, on what condition).
+- **Model the whole platform.** Seven first‑class **component** object types in one hierarchical, collapsible graph:
+  - **Orchestrator** — the single control plane (which task/agent runs, in what order, on what condition; owns the gates).
   - **Task** — a stage of the workflow (groups the agents that carry it out).
-  - **Agent** — single‑responsibility worker, pinned model, refusal as a first‑class output, declared telemetry.
-  - **MCP Tool** — the typed, audited call boundary (effect class: read / write / external).
+  - **Agent** — single‑responsibility **LLM** worker, pinned model, refusal as a first‑class output, declared telemetry.
+  - **MCP Tool** — the typed, audited call boundary (effect class: read / write / external); owned by an agent or the orchestrator.
   - **Job** — long‑running / async work (queue, timeout, retries).
   - **Router** — dynamic model selection (candidate models + a routing policy by complexity / quality / cost).
   - **System** — the datastores and external systems agents touch (databases, vector stores, graph/ontology stores, FHIR endpoints, interface engines).
+- **Govern the transitions — the controls layer.** A **Gate** is a control over a consequential
+  transition (promote / deploy / expose / act / retrain / admit). It binds the transition to a
+  **pluggable deterministic reasoner** (ASP/Clingo today; SMT reservable — **never an LLM**), the
+  rules + fact‑schema it proves against, and a mode (shadow / live). Gates are a *separate axis*
+  from the seven component kinds (assets vs controls), owned by the orchestrator; a gated stage
+  references its gate. This is the **proof spine** and the conformance‑evidence surface — no
+  consequential change takes effect without a machine‑checkable proof, and no LLM ever sits in
+  the proof's path. See [`docs/architecture/object-semantics.md`](docs/architecture/object-semantics.md).
 - **Navigate at scale.** Double‑click to expand/collapse any node; **Subject Areas** are saved views that focus the whole platform down to one slice. Dark / light / high‑contrast themes, scalable type.
 - **Validate live.** Every object is checked against the `agent-atlas` JSON schema as you edit. Invalid objects are flagged in the tree, and a plain‑language issue list names exactly what's missing and jumps you to it.
-- **Export a registry.** Produce the versioned manifests (`*.orchestrator.yaml`, `*.agent.yaml`, `*.tool.yaml`, `*.job.yaml`, `*.router.yaml`, `*.system.yaml`) — the single source of truth for the fleet.
+- **Export a registry.** Produce the versioned manifests (`*.orchestrator.yaml`, `*.agent.yaml`, `*.tool.yaml`, `*.job.yaml`, `*.router.yaml`, `*.system.yaml`, `*.gate.yaml`) — the single source of truth for the fleet.
 
 ## How it relates to agent-atlas
 
