@@ -114,3 +114,11 @@ The actual goal. Runs only after P1–P3 (complete recovery + a ruler + self-cre
 ## Dependency spine (build order)
 P1-b anchoring + P1-a gate recovery  →  P2-b engine + rules  →  P3 self-scan  →  P4 Almanac eval +
 target  →  P5 Almanac rebuild. DIAG-67/68 land inside P1 alongside P1-a/b.
+
+## Jira tickets (created 2026-07-22, DIAG board)
+- **P1** DIAG-69 gate recovery · DIAG-70 id-anchoring (+ existing DIAG-67 jobs, DIAG-68 job-schema) — epic DIAG-4/6
+- **P2** DIAG-71 ratify rules v1.0 · DIAG-72 structural engine + R1–R9 pack — epic DIAG-6
+- **P3** DIAG-73 self-scan Atlas (take our own medicine) — epic DIAG-4
+- **P4** DIAG-74 Almanac conformance run · DIAG-76 two-column view (relates DIAG-25) · DIAG-75 corrected target + CLAUDE.md — epic DIAG-4
+- **P5** Almanac rebuild toward almanac-vNext — tracked in ALM (not yet filed)
+Note: DIAG board is flat (Epic→Task); DIAG-25 is a Task not an Epic, so P4-b parents to DIAG-4 and relates to DIAG-25.
